@@ -5,6 +5,9 @@ import android.content.res.Configuration
 import android.os.Build
 import okhttp3.HttpUrl
 import java.util.Locale
+import kotlin.math.abs
+
+private const val ANY_DPI = 65534
 
 internal class DeviceInfo(
     val sdk: Int,
@@ -26,7 +29,7 @@ internal fun DeviceInfo(context: Context): DeviceInfo {
     val abis = Build.SUPPORTED_ABIS
     val res = context.resources
     val densityDpi = res.displayMetrics.densityDpi
-    val languages = res.configuration.locales().mapNotNull { it.isO3Language.ifEmpty { null } }
+    val languages = res.configuration.locales().mapNotNull { it.language.ifEmpty { null } }
     return DeviceInfo(
         sdk = Build.VERSION.SDK_INT,
         abis = abis,
@@ -90,20 +93,44 @@ private fun filterArtifacts(
     var targetBaseSdk = 0
     var abiMatchIndex = Int.MAX_VALUE
     var targetAbiSdk = 0
+    var targetDensity = 0
     for (artifact in artifacts) {
         val artifactMinSdk = artifact.minSdk
-        if (artifact.abi == null && artifact.density == null && artifact.language == null) {
+        val artifactAbi = artifact.abi
+        val artifactDensity = artifact.density
+        val artifactLanguage = artifact.language
+        if (artifactAbi == null && artifactDensity == null && artifactLanguage == null) {
             // base artifact
             if (artifactMinSdk != null && artifactMinSdk <= deviceInfo.sdk && artifactMinSdk > targetBaseSdk) {
                 targetBaseSdk = artifactMinSdk
             }
-        } else if (artifact.abi != null) {
+        } else if (artifactAbi != null) {
             // search for the abi that matches the lowest index in the list of compatible abi's
-            val abiIndex = deviceInfo.abis.indexOf(artifact.abi)
+            val abiIndex = deviceInfo.abis.indexOf(artifactAbi)
             if (abiIndex != -1 && abiIndex <= abiMatchIndex) {
                 abiMatchIndex = abiIndex
                 if (artifactMinSdk != null && artifactMinSdk <= deviceInfo.sdk && artifactMinSdk > targetAbiSdk) {
                     targetAbiSdk = artifactMinSdk
+                }
+            }
+        } else if (artifactDensity != null) {
+            // find best matching density
+            if (targetDensity == 0) {
+                targetDensity = artifactDensity
+            } else if (artifactDensity != targetDensity) {
+                // ANY_DPI always wins
+                if (targetDensity == ANY_DPI) {
+                    continue
+                }
+                if (artifactDensity == ANY_DPI) {
+                    targetDensity = artifactDensity
+                    continue
+                }
+                // Picks which dpi matches better the desired dpi taking into account the scaling formula.
+                val currentDensityDistance = densityDistance(deviceInfo.densityDpi, targetDensity)
+                val artifactDensityDistance = densityDistance(deviceInfo.densityDpi, artifactDensity)
+                if (artifactDensityDistance < currentDensityDistance) {
+                    targetDensity = artifactDensity
                 }
             }
         }
@@ -120,6 +147,19 @@ private fun filterArtifacts(
                 result.add(artifact)
             }
         }
+        if (targetDensity != 0) {
+            if (artifact.density == targetDensity) {
+                result.add(artifact)
+            }
+        }
+        if (artifact.language in deviceInfo.languages) {
+            result.add(artifact)
+        }
     }
     return result
+}
+
+// Scaling down is 2x better than up.
+private fun densityDistance(target: Int, value: Int): Int {
+    return abs(target - value) * if (target > value) 2 else 1
 }

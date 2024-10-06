@@ -5,6 +5,7 @@ import com.android.bundle.Targeting
 import com.android.bundle.Targeting.AbiTargeting
 import com.android.bundle.Targeting.LanguageTargeting
 import com.android.bundle.Targeting.ScreenDensityTargeting
+import com.android.tools.build.bundletool.model.utils.ResourcesUtils
 import me.tatarka.android.selfupdate.manifest.Manifest
 import java.io.File
 
@@ -55,21 +56,14 @@ private fun abiName(targeting: AbiTargeting): String? {
     }
 }
 
-private fun density(targeting: ScreenDensityTargeting): String? {
-    return when (targeting.valueList.firstOrNull()?.densityAlias) {
-        Targeting.ScreenDensity.DensityAlias.NODPI -> "nodpi"
-        Targeting.ScreenDensity.DensityAlias.LDPI -> "ldpi"
-        Targeting.ScreenDensity.DensityAlias.MDPI -> "mdpi"
-        Targeting.ScreenDensity.DensityAlias.TVDPI -> "tvdpi"
-        Targeting.ScreenDensity.DensityAlias.HDPI -> "hdpi"
-        Targeting.ScreenDensity.DensityAlias.XHDPI -> "xhdpi"
-        Targeting.ScreenDensity.DensityAlias.XXHDPI -> "xxhdpi"
-        Targeting.ScreenDensity.DensityAlias.XXXHDPI -> "xxxhdpi"
-        Targeting.ScreenDensity.DensityAlias.UNRECOGNIZED -> throw IllegalArgumentException("Unrecognized density")
-        else -> null
+private fun density(targeting: ScreenDensityTargeting): Int? {
+    return targeting.valueList.firstOrNull()?.let {
+        ResourcesUtils.convertToDpi(it)
     }
 }
 
 private fun language(targeting: LanguageTargeting): String? {
-    return targeting.valueList.firstOrNull()
+    return targeting.valueList.firstOrNull()?.let {
+        ResourcesUtils.convertLocaleToLanguage(it)
+    }
 }

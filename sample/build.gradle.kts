@@ -52,10 +52,6 @@ android {
     lint {
         checkReleaseBuilds = false
     }
-    bundle {
-        density.enableSplit = false
-        language.enableSplit = false
-    }
 }
 
 dependencies {

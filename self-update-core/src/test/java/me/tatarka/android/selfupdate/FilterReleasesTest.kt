@@ -111,7 +111,7 @@ class FilterReleasesTest {
             versionCode = 1,
             deviceInfo = DeviceInfo(
                 sdk = 21,
-                abis = arrayOf("armv7"),
+                abis = arrayOf("armeabi-v7a"),
                 densityDpi = 0,
                 languages = listOf("en_US")
             ),
@@ -247,6 +247,122 @@ class FilterReleasesTest {
             .containsExactly(
                 "base_3.apk",
                 "armeabi-v7a_2.apk"
+            )
+    }
+
+    @Test
+    fun keeps_compatible_density() {
+        val releases = listOf(
+            Manifest.Release(
+                version_name = "1.0",
+                version_code = 1,
+                minSdk = 21,
+                maxSdk = 34,
+                artifacts = listOf(
+                    Manifest.Artifact(path = "base.apk"),
+                    Manifest.Artifact(path = "mdpi.apk", density = 160),
+                    Manifest.Artifact(path = "hdpi.apk", density = 240),
+                    Manifest.Artifact(path = "xhdpi.apk", density = 320),
+                ),
+            ),
+        )
+
+        val result = filterReleases(
+            manifestUrl = manifestUrl,
+            releases = releases,
+            versionCode = 1,
+            deviceInfo = DeviceInfo(
+                sdk = 21,
+                abis = arrayOf("armeabi-v7a"),
+                densityDpi = 240,
+                languages = listOf("en_US")
+            ),
+            onlyUpgrades = false,
+        )
+
+        assertThat(result).single()
+            .prop(SelfUpdate.Release::artifacts)
+            .extracting(Manifest.Artifact::path)
+            .containsExactly(
+                "base.apk",
+                "hdpi.apk"
+            )
+    }
+
+    @Test
+    fun keeps_closest_density() {
+        val releases = listOf(
+            Manifest.Release(
+                version_name = "1.0",
+                version_code = 1,
+                minSdk = 21,
+                maxSdk = 34,
+                artifacts = listOf(
+                    Manifest.Artifact(path = "base.apk"),
+                    Manifest.Artifact(path = "mdpi.apk", density = 160),
+                    Manifest.Artifact(path = "hdpi.apk", density = 240),
+                    Manifest.Artifact(path = "xhdpi.apk", density = 320),
+                ),
+            ),
+        )
+
+        val result = filterReleases(
+            manifestUrl = manifestUrl,
+            releases = releases,
+            versionCode = 1,
+            deviceInfo = DeviceInfo(
+                sdk = 21,
+                abis = arrayOf("armeabi-v7a"),
+                densityDpi = 200,
+                languages = listOf("en_US")
+            ),
+            onlyUpgrades = false,
+        )
+
+        assertThat(result).single()
+            .prop(SelfUpdate.Release::artifacts)
+            .extracting(Manifest.Artifact::path)
+            .containsExactly(
+                "base.apk",
+                "hdpi.apk"
+            )
+    }
+
+    @Test
+    fun keeps_matching_language() {
+        val releases = listOf(
+            Manifest.Release(
+                version_name = "1.0",
+                version_code = 1,
+                minSdk = 21,
+                maxSdk = 34,
+                artifacts = listOf(
+                    Manifest.Artifact(path = "base.apk"),
+                    Manifest.Artifact(path = "en.apk", language = "en"),
+                    Manifest.Artifact(path = "es.apk", language = "es"),
+                ),
+            ),
+        )
+
+        val result = filterReleases(
+            manifestUrl = manifestUrl,
+            releases = releases,
+            versionCode = 1,
+            deviceInfo = DeviceInfo(
+                sdk = 21,
+                abis = arrayOf("armeabi-v7a"),
+                densityDpi = 0,
+                languages = listOf("en")
+            ),
+            onlyUpgrades = false,
+        )
+
+        assertThat(result).single()
+            .prop(SelfUpdate.Release::artifacts)
+            .extracting(Manifest.Artifact::path)
+            .containsExactly(
+                "base.apk",
+                "en.apk"
             )
     }
 }

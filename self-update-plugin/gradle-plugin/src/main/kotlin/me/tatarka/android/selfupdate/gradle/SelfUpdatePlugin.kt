@@ -28,7 +28,6 @@ class SelfUpdatePlugin : Plugin<Project> {
                 it.file("build-tools/${android.buildToolsVersion}/aapt2")
             }
 
-
             androidComponents.registerExtension(
                 DslExtension.Builder("selfUpdate")
                     .extendProjectWith(ProjectSelfUpdateExtension::class.java)

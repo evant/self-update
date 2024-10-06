@@ -12,6 +12,7 @@ import android.content.pm.PackageInstaller.EXTRA_STATUS
 import android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE
 import android.content.pm.PackageInstaller.SessionParams
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -116,7 +117,10 @@ class SelfUpdate(
         val installer = packageManager.packageInstaller
 
         val response = download(release = release, client = client)
-        val sessionId = installer.createSession(response.estimatedSize)
+        val sessionId = installer.createSession(
+            uri = Uri.parse(release.manifestUrl.toString()),
+            estimatedSize = response.estimatedSize
+        )
 
         coroutineScope {
             val progressJob = if (onProgress != null) {
@@ -188,9 +192,13 @@ class SelfUpdate(
         }
     }
 
-    private fun PackageInstaller.createSession(estimatedSize: Long = 0): Int {
+    private fun PackageInstaller.createSession(
+        uri: Uri,
+        estimatedSize: Long = 0
+    ): Int {
         return createSession(SessionParams(SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
+            setOriginatingUri(uri)
             if (estimatedSize > 0) {
                 setSize(estimatedSize)
             }
@@ -200,6 +208,7 @@ class SelfUpdate(
             setInstallLocation(PackageInfo.INSTALL_LOCATION_AUTO)
             if (Build.VERSION.SDK_INT >= 31) {
                 setInstallScenario(PackageManager.INSTALL_SCENARIO_FAST)
+                setRequireUserAction(SessionParams.USER_ACTION_NOT_REQUIRED)
             }
             if (Build.VERSION.SDK_INT == 30) {
                 setAutoRevokePermissionsMode(true)

@@ -56,7 +56,7 @@ internal fun filterReleases(
                 manifestUrl = manifestUrl,
                 versionName = it.version_name,
                 versionCode = it.version_code,
-                artifacts = filterSplits(it.artifacts, deviceInfo),
+                artifacts = filterArtifacts(it.artifacts, deviceInfo),
             )
         }
 }
@@ -79,7 +79,7 @@ private fun Configuration.locales(): List<Locale> {
     }
 }
 
-private fun filterSplits(
+private fun filterArtifacts(
     artifacts: List<me.tatarka.android.selfupdate.manifest.Manifest.Artifact>,
     deviceInfo: DeviceInfo,
 ): List<me.tatarka.android.selfupdate.manifest.Manifest.Artifact> {
@@ -100,7 +100,7 @@ private fun filterSplits(
         } else if (artifact.abi != null) {
             // search for the abi that matches the lowest index in the list of compatible abi's
             val abiIndex = deviceInfo.abis.indexOf(artifact.abi)
-            if (abiIndex != -1 && abiIndex < abiMatchIndex) {
+            if (abiIndex != -1 && abiIndex <= abiMatchIndex) {
                 abiMatchIndex = abiIndex
                 if (artifactMinSdk != null && artifactMinSdk <= deviceInfo.sdk && artifactMinSdk > targetAbiSdk) {
                     targetAbiSdk = artifactMinSdk

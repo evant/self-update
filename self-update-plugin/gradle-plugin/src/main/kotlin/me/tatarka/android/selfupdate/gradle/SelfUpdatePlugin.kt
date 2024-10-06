@@ -47,12 +47,6 @@ class SelfUpdatePlugin : Plugin<Project> {
             val defaultOutputDir = project.layout.buildDirectory.dir("outputs/selfupdate")
 
             androidComponents.finalizeDsl { a ->
-                // this needs to be explicitly set for the correct apk splits
-                if (a.packaging.jniLibs.useLegacyPackaging == null) {
-                    a.packaging.jniLibs.useLegacyPackaging =
-                        (a.defaultConfig.minSdk ?: Int.MAX_VALUE) < 23
-                }
-
                 val projectConfig =
                     (android as ExtensionAware).extensions.getByType<ProjectSelfUpdateExtension>()
 

@@ -1,4 +1,3 @@
 <resources>
-    <string name="app_name">sample</string>
-    <string name="title_activity_main">MainActivity</string>
+    <string name="app_name">Self Update Sample</string>
 </resources>

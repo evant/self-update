@@ -1,3 +1,5 @@
+package me.tatarka.android.selfupdate.gradle
+
 import com.android.build.api.dsl.BuildType
 import com.android.build.api.dsl.ProductFlavor
 import com.android.build.api.variant.ApplicationVariant

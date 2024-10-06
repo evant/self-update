@@ -4,16 +4,17 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import okhttp3.HttpUrl
-import okhttp3.internal.indexOf
 import java.util.Locale
 
 internal class DeviceInfo(
+    val sdk: Int,
     val abis: Array<String>,
     val densityDpi: Int,
     val languages: List<String>,
 ) {
     companion object {
         val Unknown = DeviceInfo(
+            sdk = 0,
             abis = emptyArray(),
             densityDpi = 0,
             languages = emptyList(),
@@ -26,12 +27,17 @@ internal fun DeviceInfo(context: Context): DeviceInfo {
     val res = context.resources
     val densityDpi = res.displayMetrics.densityDpi
     val languages = res.configuration.locales().mapNotNull { it.isO3Language.ifEmpty { null } }
-    return DeviceInfo(abis = abis, densityDpi = densityDpi, languages = languages)
+    return DeviceInfo(
+        sdk = Build.VERSION.SDK_INT,
+        abis = abis,
+        densityDpi = densityDpi,
+        languages = languages
+    )
 }
 
 internal fun filterReleases(
     manifestUrl: HttpUrl,
-    releases: List<Manifest.Release>,
+    releases: List<me.tatarka.android.selfupdate.manifest.Manifest.Release>,
     versionCode: Long,
     deviceInfo: DeviceInfo = DeviceInfo.Unknown,
     tags: Set<String>? = null,
@@ -41,6 +47,8 @@ internal fun filterReleases(
         .filter {
             if (tags != null && it.tags != tags) return@filter false
             if (onlyUpgrades && it.version_code <= versionCode) return@filter false
+            if (deviceInfo.sdk > 0 && !sdkInRange(deviceInfo.sdk, it.minSdk, it.maxSdk))
+                return@filter false
             true
         }
         .map {
@@ -53,6 +61,15 @@ internal fun filterReleases(
         }
 }
 
+private fun sdkInRange(sdk: Int, min: Int?, max: Int?): Boolean {
+    return when {
+        min != null && max != null -> sdk in min..max
+        min != null -> sdk >= min
+        max != null -> sdk <= max
+        else -> true
+    }
+}
+
 private fun Configuration.locales(): List<Locale> {
     return if (Build.VERSION.SDK_INT >= 24) {
         val list = locales
@@ -63,30 +80,46 @@ private fun Configuration.locales(): List<Locale> {
 }
 
 private fun filterSplits(
-    artifacts: List<Manifest.Artifact>,
+    artifacts: List<me.tatarka.android.selfupdate.manifest.Manifest.Artifact>,
     deviceInfo: DeviceInfo,
-): List<Manifest.Artifact> {
+): List<me.tatarka.android.selfupdate.manifest.Manifest.Artifact> {
     if (deviceInfo === DeviceInfo.Unknown) {
         return artifacts
     }
-    val result = mutableListOf<Manifest.Artifact>()
+    val result = mutableListOf<me.tatarka.android.selfupdate.manifest.Manifest.Artifact>()
+    var targetBaseSdk = 0
     var abiMatchIndex = Int.MAX_VALUE
-    var abiArtifactIndex = -1
-    artifacts.forEachIndexed { index, artifact ->
+    var targetAbiSdk = 0
+    for (artifact in artifacts) {
+        val artifactMinSdk = artifact.minSdk
         if (artifact.abi == null && artifact.density == null && artifact.language == null) {
             // base artifact
-            result.add(artifact)
+            if (artifactMinSdk != null && artifactMinSdk <= deviceInfo.sdk && artifactMinSdk > targetBaseSdk) {
+                targetBaseSdk = artifactMinSdk
+            }
         } else if (artifact.abi != null) {
             // search for the abi that matches the lowest index in the list of compatible abi's
             val abiIndex = deviceInfo.abis.indexOf(artifact.abi)
             if (abiIndex != -1 && abiIndex < abiMatchIndex) {
                 abiMatchIndex = abiIndex
-                abiArtifactIndex = index
+                if (artifactMinSdk != null && artifactMinSdk <= deviceInfo.sdk && artifactMinSdk > targetAbiSdk) {
+                    targetAbiSdk = artifactMinSdk
+                }
             }
         }
     }
-    if (abiArtifactIndex != -1) {
-        result.add(artifacts[abiArtifactIndex])
+    val targetAbi = deviceInfo.abis.getOrNull(abiMatchIndex)
+    for (artifact in artifacts) {
+        if (artifact.abi == null && artifact.density == null && artifact.language == null) {
+            if (artifact.minSdk == null || artifact.minSdk == targetBaseSdk) {
+                result.add(artifact)
+            }
+        }
+        if (targetAbi != null) {
+            if (artifact.abi == targetAbi && (artifact.minSdk == null || artifact.minSdk == targetAbiSdk)) {
+                result.add(artifact)
+            }
+        }
     }
     return result
 }

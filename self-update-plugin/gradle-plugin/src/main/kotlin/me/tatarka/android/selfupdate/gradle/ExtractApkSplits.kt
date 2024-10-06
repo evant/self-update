@@ -1,3 +1,6 @@
+package me.tatarka.android.selfupdate.gradle
+
+import com.android.bundle.Devices
 import com.android.tools.build.bundletool.androidtools.Aapt2Command
 import com.android.tools.build.bundletool.commands.BuildApksCommand
 import com.android.tools.build.bundletool.commands.DumpCommand
@@ -45,7 +48,7 @@ abstract class ExtractApkSplits : DefaultTask() {
 
     @get:OutputDirectory
     abstract val output: DirectoryProperty
-    
+
     @get:OutputFile
     abstract val version: RegularFileProperty
 
@@ -58,6 +61,8 @@ abstract class ExtractApkSplits : DefaultTask() {
 
         val versionNameStream = ByteArrayOutputStream()
         val versionCodeStream = ByteArrayOutputStream()
+        val minSdkStream = ByteArrayOutputStream()
+        val maxSdkStream = ByteArrayOutputStream()
 
         DumpCommand.builder()
             .setBundlePath(bundlePath)
@@ -72,6 +77,22 @@ abstract class ExtractApkSplits : DefaultTask() {
             .setDumpTarget(DumpCommand.DumpTarget.MANIFEST)
             .setXPathExpression("/manifest/@android:versionCode")
             .setOutputStream(PrintStream(versionCodeStream))
+            .build()
+            .execute()
+
+        DumpCommand.builder()
+            .setBundlePath(bundlePath)
+            .setDumpTarget(DumpCommand.DumpTarget.MANIFEST)
+            .setXPathExpression("/manifest/uses-sdk/@android:minSdkVersion")
+            .setOutputStream(PrintStream(minSdkStream))
+            .build()
+            .execute()
+
+        DumpCommand.builder()
+            .setBundlePath(bundlePath)
+            .setDumpTarget(DumpCommand.DumpTarget.MANIFEST)
+            .setXPathExpression("/manifest/uses-sdk/@android:maxSdkVersion")
+            .setOutputStream(PrintStream(maxSdkStream))
             .build()
             .execute()
 
@@ -107,9 +128,16 @@ abstract class ExtractApkSplits : DefaultTask() {
             }
             .build()
             .execute()
-        version.get().asFile.writeText(
-            versionNameStream.toString(Charsets.UTF_8) +
-                    versionCodeStream.toString(Charsets.UTF_8).trimEnd()
+
+        val manifestVersion = ManifestVersion(
+            name = versionNameStream.toString(Charsets.UTF_8).trimEnd(),
+            code = versionCodeStream.toString(Charsets.UTF_8).trimEnd().toLong(),
+            minSdk = minSdkStream.toString(Charsets.UTF_8).trimEnd().toIntOrNull(),
+            maxSdk = maxSdkStream.toString(Charsets.UTF_8).trimEnd().toIntOrNull()
         )
+
+        version.get().asFile.bufferedWriter().use {
+            manifestVersion.write(it)
+        }
     }
 }

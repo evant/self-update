@@ -1,8 +1,9 @@
 [versions]
-android = "8.2.2"
+android = "8.6.1"
 kotlin = "1.9.20"
 
 [libraries]
+selfupdate-manifest = { module = "me.tatarka.android.selfupdate:manifest" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.6.0" }
 kotlinx-coroutine = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version = "1.8.1" }
@@ -18,12 +19,15 @@ compose-activity = { module = "androidx.activity:activity-compose" }
 compose-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose" }
 activity-ktx = { module = "androidx.activity:activity-ktx" }
 assertk = { module = "com.willowtreeapps.assertk:assertk", version = "0.28.0" }
+android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android" }
 
 [bundles]
 test = ["kotlin-test", "assertk", "okhttp-mockwebserver", "kotlinx-coroutine-test"]
 
 [plugins]
+selfupdate-gradle = { id = "me.tatarka.android.selfupdate" }
 android-application = { id = "com.android.application", version.ref = "android" }
 android-library = { id = "com.android.library", version.ref = "android" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

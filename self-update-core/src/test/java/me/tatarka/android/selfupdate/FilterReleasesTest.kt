@@ -14,14 +14,14 @@ class FilterReleasesTest {
     @Test
     fun includes_all() {
         val releases = listOf(
-            Manifest.Release(
+            me.tatarka.android.selfupdate.manifest.Manifest.Release(
                 version_name = "1.0",
                 version_code = 1,
                 minSdk = 21,
                 maxSdk = 34,
                 artifacts = emptyList(),
             ),
-            Manifest.Release(
+            me.tatarka.android.selfupdate.manifest.Manifest.Release(
                 version_name = "2.0",
                 version_code = 2,
                 minSdk = 21,
@@ -56,14 +56,14 @@ class FilterReleasesTest {
     @Test
     fun includes_only_updates() {
         val releases = listOf(
-            Manifest.Release(
+            me.tatarka.android.selfupdate.manifest.Manifest.Release(
                 version_name = "1.0",
                 version_code = 1,
                 minSdk = 21,
                 maxSdk = 34,
                 artifacts = emptyList(),
             ),
-            Manifest.Release(
+            me.tatarka.android.selfupdate.manifest.Manifest.Release(
                 version_name = "2.0",
                 version_code = 2,
                 minSdk = 21,
@@ -92,14 +92,14 @@ class FilterReleasesTest {
     @Test
     fun keeps_base_artifact() {
         val releases = listOf(
-            Manifest.Release(
+            me.tatarka.android.selfupdate.manifest.Manifest.Release(
                 version_name = "1.0",
                 version_code = 1,
                 minSdk = 21,
                 maxSdk = 34,
                 artifacts = listOf(
-                    Manifest.Artifact(path = "base.apk"),
-                    Manifest.Artifact(path = "x86.apk", abi = "x86")
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact(path = "base.apk"),
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact(path = "x86.apk", abi = "x86")
                 ),
             ),
         )
@@ -118,22 +118,22 @@ class FilterReleasesTest {
 
         assertThat(result).single()
             .prop(SelfUpdate.Release::artifacts)
-            .extracting(Manifest.Artifact::path)
+            .extracting(me.tatarka.android.selfupdate.manifest.Manifest.Artifact::path)
             .containsExactly("base.apk")
     }
 
     @Test
     fun keeps_most_compatible_abi() {
         val releases = listOf(
-            Manifest.Release(
+            me.tatarka.android.selfupdate.manifest.Manifest.Release(
                 version_name = "1.0",
                 version_code = 1,
                 minSdk = 21,
                 maxSdk = 34,
                 artifacts = listOf(
-                    Manifest.Artifact(path = "x86.apk", abi = "x86"),
-                    Manifest.Artifact(path = "armeabi-v7a.apk", abi = "armeabi-v7a"),
-                    Manifest.Artifact(path = "arm64-v8a.apk", abi = "arm64-v8a"),
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact(path = "x86.apk", abi = "x86"),
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact(path = "armeabi-v7a.apk", abi = "armeabi-v7a"),
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact(path = "arm64-v8a.apk", abi = "arm64-v8a"),
                 ),
             ),
         )
@@ -152,21 +152,21 @@ class FilterReleasesTest {
 
         assertThat(result).single()
             .prop(SelfUpdate.Release::artifacts)
-            .extracting(Manifest.Artifact::path)
+            .extracting(me.tatarka.android.selfupdate.manifest.Manifest.Artifact::path)
             .containsExactly("arm64-v8a.apk")
     }
 
     @Test
     fun keeps_next_most_compatible_abi() {
         val releases = listOf(
-            Manifest.Release(
+            me.tatarka.android.selfupdate.manifest.Manifest.Release(
                 version_name = "1.0",
                 version_code = 1,
                 minSdk = 21,
                 maxSdk = 34,
                 artifacts = listOf(
-                    Manifest.Artifact(path = "x86.apk", abi = "x86"),
-                    Manifest.Artifact(path = "armeabi-v7a.apk", abi = "armeabi-v7a"),
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact(path = "x86.apk", abi = "x86"),
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact(path = "armeabi-v7a.apk", abi = "armeabi-v7a"),
                 ),
             ),
         )
@@ -185,7 +185,7 @@ class FilterReleasesTest {
 
         assertThat(result).single()
             .prop(SelfUpdate.Release::artifacts)
-            .extracting(Manifest.Artifact::path)
+            .extracting(me.tatarka.android.selfupdate.manifest.Manifest.Artifact::path)
             .containsExactly("armeabi-v7a.apk")
     }
 }

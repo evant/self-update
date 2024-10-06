@@ -34,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -61,6 +62,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val version = packageManager.getPackageInfo(packageName, 0).versionName
+
         setContent {
             val vm = viewModel<MainViewModel>()
             val releases by vm.releases.collectAsState(initial = emptyList())
@@ -69,7 +72,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Scaffold(
                     topBar = {
-                        TopAppBar(title = { Text("Self Update") })
+                        TopAppBar(title = { Text("Self Update (${version})") })
                     }
                 ) { padding ->
                     if (releases.isEmpty()) {
@@ -131,8 +134,8 @@ class MainActivity : ComponentActivity() {
         private val _releases = flow {
             emit(
                 selfUpdate.check(
-//            manifestUrl = "http://10.0.2.2:8000/index.json",
-                    manifestUrl = "http://10.0.0.18:8000/index.json",
+//            manifestUrl = "http://10.0.2.2:8000/manifest.json",
+                    manifestUrl = "http://10.0.0.18:8000/manifest.json",
                     onlyUpgrades = false
                 )
             )

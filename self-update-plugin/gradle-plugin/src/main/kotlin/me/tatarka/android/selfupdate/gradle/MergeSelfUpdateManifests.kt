@@ -1,7 +1,10 @@
+package me.tatarka.android.selfupdate.gradle
+
 import com.android.build.gradle.internal.tasks.BaseTask
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
+import me.tatarka.android.selfupdate.manifest.Manifest
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.SetProperty
@@ -30,7 +33,7 @@ abstract class MergeSelfUpdateManifests : BaseTask() {
             .filter { it.exists() }
             .associate { manifest ->
                 manifest.parentFile.name to manifest.inputStream().buffered().use {
-                    ManifestJson.decodeFromStream(it)
+                    Manifest.parse(it)
                 }
             }
         val allVariants = variants.getOrElse(emptySet())
@@ -55,7 +58,7 @@ abstract class MergeSelfUpdateManifests : BaseTask() {
         }
         releases.sortByDescending { it.version_code }
         output.get().asFile.outputStream().buffered().use {
-            ManifestJson.encodeToStream(Manifest(releases = releases), it)
+            Manifest(releases = releases).write(it)
         }
     }
 }

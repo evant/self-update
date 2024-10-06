@@ -7,7 +7,8 @@ plugins {
 }
 
 dependencies {
-    implementation("com.android.tools.build:gradle:8.6.1")
+    implementation(libs.selfupdate.manifest)
+    implementation(libs.android.gradle)
     implementation("com.android.tools.build:bundletool:1.17.1")
     implementation("com.google.protobuf:protobuf-java:3.22.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
@@ -27,8 +28,8 @@ kotlin {
 gradlePlugin {
     plugins {
         create("selfUpdate") {
-            id = "me.tatarka.selfupdate"
-            implementationClass = "SelfUpdatePlugin"
+            id = "me.tatarka.android.selfupdate"
+            implementationClass = "me.tatarka.android.selfupdate.gradle.SelfUpdatePlugin"
         }
     }
 }

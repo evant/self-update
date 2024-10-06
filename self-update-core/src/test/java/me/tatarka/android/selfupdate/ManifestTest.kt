@@ -7,15 +7,15 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isNotNull
 import assertk.assertions.prop
 import assertk.assertions.single
-import me.tatarka.android.selfupdate.Manifest.Artifact
-import me.tatarka.android.selfupdate.Manifest.Release
-import me.tatarka.android.selfupdate.Manifest.Updater
+import me.tatarka.android.selfupdate.manifest.Manifest.Artifact
+import me.tatarka.android.selfupdate.manifest.Manifest.Release
+import me.tatarka.android.selfupdate.manifest.Manifest.Updater
 import kotlin.test.Test
 
 class ManifestTest {
     @Test
     fun parses_manifest_json() {
-        val manifest = Manifest.parse(
+        val manifest = me.tatarka.android.selfupdate.manifest.Manifest.parse(
             """
             {
               "releases": [
@@ -41,7 +41,7 @@ class ManifestTest {
         )
 
         assertThat(manifest)
-            .prop(Manifest::releases)
+            .prop(me.tatarka.android.selfupdate.manifest.Manifest::releases)
             .single()
             .all {
                 prop(Release::version_name).isEqualTo("1.0")

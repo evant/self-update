@@ -27,7 +27,7 @@ class DownloadTest {
                 versionName = "1.0",
                 versionCode = 1L,
                 manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk"))
+                artifacts = listOf(me.tatarka.android.selfupdate.manifest.Manifest.Artifact("base.apk"))
             )
         )
         var apkName = ""
@@ -51,8 +51,8 @@ class DownloadTest {
                 versionCode = 1L,
                 manifestUrl = webServer.url("/"),
                 artifacts = listOf(
-                    Manifest.Artifact("base.apk"),
-                    Manifest.Artifact("split.apk")
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact("base.apk"),
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact("split.apk")
                 )
             )
         )
@@ -81,7 +81,7 @@ class DownloadTest {
                 versionName = "1.0",
                 versionCode = 1L,
                 manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk"))
+                artifacts = listOf(me.tatarka.android.selfupdate.manifest.Manifest.Artifact("base.apk"))
             )
         )
         var progress = 0f
@@ -111,8 +111,8 @@ class DownloadTest {
                 versionCode = 1L,
                 manifestUrl = webServer.url("/"),
                 artifacts = listOf(
-                    Manifest.Artifact("base.apk"),
-                    Manifest.Artifact("split.apk")
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact("base.apk"),
+                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact("split.apk")
                 )
             )
         )

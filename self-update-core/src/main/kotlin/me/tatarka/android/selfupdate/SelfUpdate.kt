@@ -62,7 +62,7 @@ class SelfUpdate(
         return withContext(Dispatchers.IO) {
             val manifestBody = manifestResponse.ensureBody()
             val manifest = manifestBody.byteStream().use { stream ->
-                json.decodeFromStream<Manifest>(stream)
+                json.decodeFromStream<me.tatarka.android.selfupdate.manifest.Manifest>(stream)
             }
             val versionCode = context.versionCode()
 
@@ -81,7 +81,7 @@ class SelfUpdate(
         val versionName: String,
         val versionCode: Long,
         internal val manifestUrl: HttpUrl,
-        internal val artifacts: List<Manifest.Artifact>,
+        internal val artifacts: List<me.tatarka.android.selfupdate.manifest.Manifest.Artifact>,
     ) {
 
         override fun equals(other: Any?): Boolean {

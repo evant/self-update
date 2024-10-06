@@ -87,8 +87,8 @@ private class ArtifactNamer {
     private var index = 0
 
     fun name(url: HttpUrl): String {
-        val simpleName = url.pathSegments.last()
-        val uniqueName = simpleName + index
+        val simpleName = url.pathSegments.last().removeSuffix(".apk")
+        val uniqueName = simpleName + "_" + index + ".apk"
         index += 1
         return uniqueName
     }

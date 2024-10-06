@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.selfupdate.gradle)
 }
 
 android {
@@ -8,16 +9,17 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "me.tatarka.android.sample"
-        minSdk = 21
+        applicationId = "me.tatarka.android.samplne"
+        minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
 
         testInstrumentationRunner = "android.support.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+        resourceConfigurations += listOf("en", "es")
     }
 
     buildTypes {
@@ -49,6 +51,10 @@ android {
     }
     lint {
         checkReleaseBuilds = false
+    }
+    bundle {
+        density.enableSplit = false
+        language.enableSplit = false
     }
 }
 

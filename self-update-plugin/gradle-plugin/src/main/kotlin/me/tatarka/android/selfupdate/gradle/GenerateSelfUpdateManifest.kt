@@ -1,9 +1,10 @@
+package me.tatarka.android.selfupdate.gradle
+
 import com.android.build.gradle.internal.tasks.BaseTask
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.encodeToStream
+import me.tatarka.android.selfupdate.manifest.Manifest
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.CacheableTask
@@ -14,9 +15,6 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
-import java.io.Serializable
-
-class Version(val name: String, val code: Long) : Serializable
 
 @CacheableTask
 @OptIn(ExperimentalSerializationApi::class)
@@ -27,7 +25,7 @@ abstract class GenerateSelfUpdateManifest : BaseTask() {
     abstract val artifacts: DirectoryProperty
 
     @get:Input
-    abstract val version: Property<Version>
+    abstract val version: Property<ManifestVersion>
 
     @get:Input
     @get:Optional
@@ -49,25 +47,28 @@ abstract class GenerateSelfUpdateManifest : BaseTask() {
         val version = version.get()
         val apkSplitsPath = artifacts.get().asFile
         val artifacts = parseArtifactMetadata(apkSplitsPath.resolve("toc.pb")) { path ->
-            path.removeSurrounding(prefix = "splits/", suffix = ".apk") + 
+            path.removeSurrounding(prefix = "splits/", suffix = ".apk") +
                     artifactSuffix.getOrElse("") + ".apk"
         }
         val manifestPath = output.get().asFile
         manifestPath.outputStream().buffered().use {
-            ManifestJson.encodeToStream(
-                Manifest(
-                    releases = listOf(
-                        Manifest.Release(
-                            version_name = version.name,
-                            version_code = version.code,
-                            tags = tags.getOrElse(emptySet()),
-                            notes = notes.orNull,
-                            artifacts = artifacts
+            Manifest(
+                releases = listOf(
+                    Manifest.Release(
+                        version_name = version.name,
+                        version_code = version.code,
+                        tags = tags.getOrElse(emptySet()),
+                        notes = notes.orNull,
+                        minSdk = version.minSdk,
+                        maxSdk = version.maxSdk,
+                        artifacts = artifacts,
+                        updater = Manifest.Updater(
+                            version = 1,
+                            feature_version = 1,
                         )
                     )
-                ),
-                it
-            )
+                )
+            ).write(it)
         }
     }
 }

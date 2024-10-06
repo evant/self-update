@@ -1,3 +1,5 @@
+package me.tatarka.android.selfupdate.gradle
+
 import com.android.build.gradle.internal.tasks.BaseTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property

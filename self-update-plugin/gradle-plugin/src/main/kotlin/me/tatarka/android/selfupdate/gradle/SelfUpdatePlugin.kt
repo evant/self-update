@@ -1,3 +1,5 @@
+package me.tatarka.android.selfupdate.gradle
+
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.component.analytics.AnalyticsEnabledSigningConfig
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
@@ -44,12 +46,19 @@ class SelfUpdatePlugin : Plugin<Project> {
 
             val defaultOutputDir = project.layout.buildDirectory.dir("outputs/selfupdate")
 
-            androidComponents.finalizeDsl {
+            androidComponents.finalizeDsl { a ->
+                // this needs to be explicitly set for the correct apk splits
+                if (a.packaging.jniLibs.useLegacyPackaging == null) {
+                    a.packaging.jniLibs.useLegacyPackaging =
+                        (a.defaultConfig.minSdk ?: Int.MAX_VALUE) < 23
+                }
+
                 val projectConfig =
                     (android as ExtensionAware).extensions.getByType<ProjectSelfUpdateExtension>()
 
                 projectConfig.mergeVariants.finalizeValue()
                 projectConfig.base.update.finalizeValue()
+
 
                 if (projectConfig.mergeVariants.getOrElse(false) == true) {
                     val packageSelfUpdate =
@@ -127,11 +136,14 @@ class SelfUpdatePlugin : Plugin<Project> {
                         "generate${variant.name.capitalized()}SelfUpdateManifest"
                     ) {
                         artifacts.set(createArtifacts.flatMap { it.output })
-                        version.convention(createArtifacts.flatMap {
-                            it.version.asFile.map { file ->
-                                val (versionName, versionCode) = file.readText().lines()
-                                Version(versionName, versionCode.toLong())
-                            }
+                        version.convention(createArtifacts.flatMap { task ->
+                            task.version.asFile
+                                .filter { it.exists() }
+                                .map { file ->
+                                    file.bufferedReader().use {
+                                        ManifestVersion.parse(it)
+                                    }
+                                }
                         })
                         if (variantConfig != null) {
                             tags.convention(variantConfig.tags)
@@ -140,8 +152,9 @@ class SelfUpdatePlugin : Plugin<Project> {
                     }
 
                     if (projectConfig.mergeVariants.getOrElse(false) == true) {
-                        val packageSelfUpdate = project.tasks.named<PackageSelfUpdate>("packageSelfUpdate")
-                        
+                        val packageSelfUpdate =
+                            project.tasks.named<PackageSelfUpdate>("packageSelfUpdate")
+
                         val suffix = (variantConfig?.artifactSuffix ?: projectConfig.artifactSuffix)
                             .orElse(generateManifest.flatMap { it.version.map { version -> "${variant.name}-${version.code}" } })
 
@@ -168,7 +181,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                         packageSelfUpdate.dependsOn(copyArtifacts, mergeManifests)
                     } else {
                         val packageSelfUpdate = project.tasks.named("packageSelfUpdate")
-                        
+
                         val packageVariantSelfUpdate = project.tasks.register<PackageSelfUpdate>(
                             "package${variant.name.capitalized()}SelfUpdate"
                         ) {

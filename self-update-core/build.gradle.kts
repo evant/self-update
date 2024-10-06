@@ -39,6 +39,7 @@ android {
 }
 
 dependencies {
+    implementation("me.tatarka.android.selfupdate:manifest:1")
     api(libs.kotlinx.coroutine)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)

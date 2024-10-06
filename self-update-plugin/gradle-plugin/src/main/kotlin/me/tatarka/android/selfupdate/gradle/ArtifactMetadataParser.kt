@@ -1,8 +1,11 @@
+package me.tatarka.android.selfupdate.gradle
+
 import com.android.bundle.Commands.BuildApksResult
 import com.android.bundle.Targeting
 import com.android.bundle.Targeting.AbiTargeting
 import com.android.bundle.Targeting.LanguageTargeting
 import com.android.bundle.Targeting.ScreenDensityTargeting
+import me.tatarka.android.selfupdate.manifest.Manifest
 import java.io.File
 
 internal fun parseArtifactMetadata(
@@ -14,18 +17,23 @@ internal fun parseArtifactMetadata(
     }
     return buildList {
         for (variant in toc.variantList) {
+            val minSdk = variant.targeting.sdkVersionTargeting.valueList.firstOrNull()?.min?.value
             for (apkSet in variant.apkSetList) {
                 for (description in apkSet.apkDescriptionList) {
-                    add(
-                        Manifest.Artifact(
-                            path = rename(description.path),
-                            abi = (description.targeting.abiTargeting
-                                ?: variant.targeting.abiTargeting)?.let { abiName(it) },
-                            density = (description.targeting.screenDensityTargeting
-                                ?: variant.targeting.screenDensityTargeting)?.let { density(it) },
-                            language = description.targeting.languageTargeting?.let { language(it) }
+                    val artifactPath = rename(description.path)
+                    if (none { it.path == artifactPath }) {
+                        add(
+                            Manifest.Artifact(
+                                path = artifactPath,
+                                minSdk = minSdk,
+                                abi = (description.targeting.abiTargeting
+                                    ?: variant.targeting.abiTargeting)?.let { abiName(it) },
+                                density = (description.targeting.screenDensityTargeting
+                                    ?: variant.targeting.screenDensityTargeting)?.let { density(it) },
+                                language = description.targeting.languageTargeting?.let { language(it) }
+                            )
                         )
-                    )
+                    }
                 }
             }
         }

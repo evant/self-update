@@ -53,7 +53,7 @@ class Manifest(val releases: List<Release>) {
     class Artifact(
         val path: String,
         val minSdk: Int? = null,
-        val density: String? = null,
+        val density: Int? = null,
         val abi: String? = null,
         val language: String? = null,
     )

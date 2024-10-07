@@ -81,6 +81,8 @@ class SelfUpdate(
     class Release internal constructor(
         val versionName: String,
         val versionCode: Long,
+        val notes: String?,
+        val tags: Set<String>,
         internal val manifestUrl: HttpUrl,
         internal val artifacts: List<me.tatarka.android.selfupdate.manifest.Manifest.Artifact>,
     ) {

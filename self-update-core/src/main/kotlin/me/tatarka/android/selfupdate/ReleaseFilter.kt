@@ -59,6 +59,8 @@ internal fun filterReleases(
                 manifestUrl = manifestUrl,
                 versionName = it.version_name,
                 versionCode = it.version_code,
+                notes = it.notes,
+                tags = it.tags,
                 artifacts = filterArtifacts(it.artifacts, deviceInfo),
             )
         }

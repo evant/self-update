@@ -2,19 +2,19 @@
 
 package me.tatarka.android.selfupdate
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
-import android.content.pm.PackageInstaller
-import android.content.pm.PackageInstaller.EXTRA_STATUS
-import android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE
-import android.content.pm.PackageInstaller.SessionParams
+import android.content.pm.PackageInstaller.SessionCallback
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PersistableBundle
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -26,6 +26,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import me.tatarka.android.selfupdate.PackageInstallerCompat.Companion.EXTRA_STATUS
+import me.tatarka.android.selfupdate.PackageInstallerCompat.Companion.EXTRA_STATUS_MESSAGE
+import me.tatarka.android.selfupdate.PackageInstallerCompat.Companion.STATUS_PENDING_USER_ACTION
+import me.tatarka.android.selfupdate.PackageInstallerCompat.Companion.STATUS_SUCCESS
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -36,15 +40,21 @@ import okio.use
 import ru.gildor.coroutines.okhttp.await
 import java.io.IOException
 import kotlin.coroutines.resume
+import kotlin.math.absoluteValue
 
 private val CommitFlow = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
 
-class SelfUpdate(
+class SelfUpdate internal constructor(
     private val context: Context,
     private val receiver: Class<out BroadcastReceiver> = SelfUpdateReceiver::class.java,
+    private val client: OkHttpClient = OkHttpClient(),
 ) {
 
-    private val client = OkHttpClient()
+    constructor(
+        context: Context,
+        receiver: Class<out BroadcastReceiver> = SelfUpdateReceiver::class.java,
+    ) : this(context, receiver, OkHttpClient())
+
     private val json = Json { ignoreUnknownKeys = true }
     private var installingJob: Job? = null
 
@@ -108,21 +118,198 @@ class SelfUpdate(
         }
     }
 
-    suspend fun install(
+    enum class DownloadState {
+        None, Partial, Complete
+    }
+
+    suspend fun download(
         release: Release,
         onProgress: ((Float) -> Unit)? = null
     ) {
-        // can only run one install at a time.
-        installingJob?.cancel()
+        val (session, _) = getOrDownloadSession(release, onProgress)
+        session.close()
+    }
 
-        val packageManager = context.packageManager
-        val installer = packageManager.packageInstaller
+    suspend fun currentDownloadState(release: Release): DownloadState {
+        val installer = PackageInstallerCompat.getInstance(context)
+        if (installer.mySessions.isEmpty()) {
+            return DownloadState.None
+        }
+        // assuming a single session
+        val sessionInfo = installer.mySessions.first()
+        installer.openSession(sessionInfo.sessionId).use { session ->
+            if (matchMetadata(session, release)) {
+                // check all artifacts are downloaded
+                val bytesWritten = readBytesWritten(session)
+                if (bytesWritten.isEmpty()) {
+                    return DownloadState.None
+                }
+                // not all artifacts have been fetched
+                if (bytesWritten.size != release.artifacts.size)  {
+                    return DownloadState.Partial
+                }
+                return if (bytesWritten.all { it.value < 0 }) {
+                    DownloadState.Complete
+                } else {
+                    return DownloadState.Partial
+                }
+            } else {
+                return DownloadState.None
+            }
+        }
+    }
+
+    private suspend fun getOrDownloadSession(
+        release: Release,
+        onProgress: ((Float) -> Unit)? = null
+    ): Pair<PackageInstallerCompat.Session, Int> {
+        val installer = PackageInstallerCompat.getInstance(context)
+
+        if (installer.mySessions.isNotEmpty()) {
+            // may already have a session, see if it's for the same release
+            val sessionInfo = installer.mySessions.first()
+            val session = installer.openSession(sessionInfo.sessionId)
+            if (matchMetadata(session, release)) {
+                // report current progress
+                if (onProgress != null) {
+                    onProgress(sessionInfo.progress)
+                }
+
+                // filter completed downloads
+                val skip = readBytesWritten(session).mapNotNull { (name, bytes) ->
+                    // negative denotes complete
+                    if (bytes < 0) name else null
+                }.toSet()
+
+                val response = download(release = release, client = client, skip = skip)
+
+                watchProgress(
+                    installer = installer,
+                    sessionId = sessionInfo.sessionId,
+                    onProgress = onProgress
+                ) {
+                    downloadArtifacts(session = session, response = response)
+                }
+
+                return session to sessionInfo.sessionId
+            } else {
+                // not a match, delete as we currently only handle 1 session
+                session.use { it.abandon() }
+            }
+        }
 
         val response = download(release = release, client = client)
         val sessionId = installer.createSession(
             uri = Uri.parse(release.manifestUrl.toString()),
             estimatedSize = response.estimatedSize
         )
+        val session = installer.openSession(sessionId)
+        recordMetadata(session, release)
+
+        watchProgress(
+            installer = installer,
+            sessionId = sessionId,
+            onProgress = onProgress,
+        ) {
+            downloadArtifacts(session = session, response = response)
+        }
+
+        return session to sessionId
+    }
+
+    private suspend fun watchProgress(
+        installer: PackageInstallerCompat,
+        sessionId: Int,
+        onProgress: ((Float) -> Unit)?,
+        body: suspend () -> Unit
+    ) {
+        coroutineScope {
+            val progressJob = if (onProgress != null) {
+                launch {
+                    installer.watchSessionProgress(sessionId, onProgress)
+                }
+            } else {
+                null
+            }
+            body()
+            progressJob?.cancel()
+        }
+    }
+
+    private suspend fun downloadArtifacts(
+        session: PackageInstallerCompat.Session,
+        response: DownloadResponse,
+    ) {
+        try {
+            response.write(
+                onProgress = session::setStagingProgress,
+                output = { name, size ->
+                    session.openWrite(name, 0, size)
+                },
+                complete = { name, size ->
+                    recordBytesWritten(session, name, size, complete = true)
+                }
+            )
+        } catch (e: CancellationException) {
+            session.close()
+            throw e
+        } catch (e: IOException) {
+            session.close()
+            throw e
+        }
+    }
+
+    private fun recordMetadata(session: PackageInstallerCompat.Session, release: Release) {
+        session.appMetadata = PersistableBundle().apply {
+            putLong("versionCode", release.versionCode)
+        }
+    }
+
+    private fun recordBytesWritten(
+        session: PackageInstallerCompat.Session,
+        name: String,
+        size: Long,
+        complete: Boolean,
+    ) {
+        val bundle = session.appMetadata
+        val downloaded = bundle.getPersistableBundle("downloaded") ?: PersistableBundle()
+        downloaded.putLong(name, if (complete) -size.absoluteValue else size)
+        bundle.putPersistableBundle("downloaded", downloaded)
+        session.appMetadata = bundle
+    }
+
+    private fun readBytesWritten(session: PackageInstallerCompat.Session): Map<String, Long> {
+        val downloaded = session.appMetadata.getPersistableBundle("downloaded") ?: return emptyMap()
+        return downloaded.keySet().associateWith { name -> downloaded.getLong(name) }
+    }
+
+    private fun matchMetadata(session: PackageInstallerCompat.Session, release: Release): Boolean {
+        val metadata = session.appMetadata
+        val versionCode = metadata.getLong("versionCode")
+        return release.versionCode == versionCode
+    }
+
+    suspend fun delete(release: Release) {
+        val packageManager = context.packageManager
+        val installer = packageManager.packageInstaller
+        // only 1 session supported currently, delete it
+        val sessions = installer.mySessions
+        if (sessions.isNotEmpty()) {
+            val sessionId = sessions.first().sessionId
+            installer.abandonSession(sessionId)
+        }
+    }
+
+    suspend fun install(
+        release: Release,
+        onProgress: ((Float) -> Unit)? = null
+    ) {
+        // can only have one install going at a time
+        installingJob?.cancel()
+
+        val (session, sessionId) = getOrDownloadSession(release, onProgress)
+
+        val installer = PackageInstallerCompat.getInstance(context)
 
         coroutineScope {
             val progressJob = if (onProgress != null) {
@@ -133,96 +320,86 @@ class SelfUpdate(
                 null
             }
             installingJob = launch {
-                installer.openSession(sessionId).use { session ->
-                    withContext(Dispatchers.IO) {
-                        response.write(onProgress = session::setStagingProgress) { name, size ->
-                            session.openWrite(name, 0, size)
-                        }
-                    }
-                    session.commit(
-                        PendingIntent.getBroadcast(
-                            context,
-                            sessionId,
-                            Intent(context, receiver),
-                            PendingIntent.FLAG_MUTABLE,
-                        ).intentSender
-                    )
-                }
+                session.commit(
+                    PendingIntent.getBroadcast(
+                        context,
+                        sessionId,
+                        Intent(context, receiver),
+                        PendingIntent.FLAG_MUTABLE,
+                    ).intentSender
+                )
             }
             CommitFlow.first().getOrThrow()
             progressJob?.cancel()
         }
     }
 
-    private suspend fun PackageInstaller.watchSessionProgress(
+    private suspend fun PackageInstallerCompat.watchSessionProgress(
         sessionId: Int,
         onProgress: (Float) -> Unit
     ) {
-        // deliver initial progress
-        val sessionInfo = getSessionInfo(sessionId)
-        if (sessionInfo != null) {
-            onProgress(sessionInfo.progress)
-        }
-        suspendCancellableCoroutine { continuation ->
-            val callback = object : PackageInstaller.SessionCallback() {
-                override fun onCreated(sId: Int) {
-                }
-
-                override fun onBadgingChanged(sId: Int) {
-                }
-
-                override fun onActiveChanged(sId: Int, active: Boolean) {
-                    if (sessionId == sId) {
-                        Log.d("SelfUpdate", "onActiveChange: ${active}")
-                    }
-                }
-
-                override fun onProgressChanged(sId: Int, progress: Float) {
-                    if (sessionId == sId) {
-                        onProgress(progress)
-                    }
-                }
-
-                override fun onFinished(sId: Int, success: Boolean) {
-                    if (sessionId == sId) {
-                        continuation.resume(Unit)
-                    }
-                }
+        withContext(Dispatchers.Main.immediate) {
+            // deliver initial progress
+            val sessionInfo = getSessionInfo(sessionId)
+            if (sessionInfo != null) {
+                onProgress(sessionInfo.progress)
             }
-            registerSessionCallback(callback)
-            continuation.invokeOnCancellation { unregisterSessionCallback(callback) }
+            suspendCancellableCoroutine { continuation ->
+                val callback = object : SessionCallback() {
+                    override fun onCreated(sId: Int) {
+                    }
+
+                    override fun onBadgingChanged(sId: Int) {
+                    }
+
+                    override fun onActiveChanged(sId: Int, active: Boolean) {
+                        if (sessionId == sId) {
+                            Log.d("SelfUpdate", "onActiveChange: ${active}")
+                        }
+                    }
+
+                    override fun onProgressChanged(sId: Int, progress: Float) {
+                        if (sessionId == sId) {
+                            onProgress(progress)
+                        }
+                    }
+
+                    override fun onFinished(sId: Int, success: Boolean) {
+                        if (sessionId == sId) {
+                            continuation.resume(Unit)
+                        }
+                    }
+                }
+                registerSessionCallback(callback)
+                continuation.invokeOnCancellation { unregisterSessionCallback(callback) }
+            }
         }
     }
 
-    private fun PackageInstaller.createSession(
+    @SuppressLint("InlinedApi")
+    private fun PackageInstallerCompat.createSession(
         uri: Uri,
         estimatedSize: Long = 0
     ): Int {
-        return createSession(SessionParams(SessionParams.MODE_FULL_INSTALL).apply {
-            setAppPackageName(context.packageName)
-            setOriginatingUri(uri)
-            if (estimatedSize > 0) {
-                setSize(estimatedSize)
-            }
-            if (Build.VERSION.SDK_INT >= 26) {
-                setInstallReason(PackageManager.INSTALL_REASON_USER)
-            }
-            setInstallLocation(PackageInfo.INSTALL_LOCATION_AUTO)
-            if (Build.VERSION.SDK_INT >= 31) {
-                setInstallScenario(PackageManager.INSTALL_SCENARIO_FAST)
-                setRequireUserAction(SessionParams.USER_ACTION_NOT_REQUIRED)
-            }
-            if (Build.VERSION.SDK_INT == 30) {
-                setAutoRevokePermissionsMode(true)
-            }
-        })
+        return createSession(
+            PackageInstallerCompat.SessionParams(PackageInstallerCompat.SessionParams.MODE_FULL_INSTALL)
+                .apply {
+                    setAppPackageName(context.packageName)
+                    setOriginatingUri(uri)
+                    setSize(estimatedSize)
+                    setInstallReason(PackageManager.INSTALL_REASON_USER)
+                    setInstallLocation(PackageInfo.INSTALL_LOCATION_AUTO)
+                    setInstallScenario(PackageManager.INSTALL_SCENARIO_FAST)
+                    setRequireUserAction(PackageInstallerCompat.SessionParams.USER_ACTION_NOT_REQUIRED)
+                }
+        )
     }
 }
 
 open class SelfUpdateReceiver : BroadcastReceiver() {
     final override fun onReceive(context: Context, intent: Intent?) {
         when (val status = intent?.extras?.getInt(EXTRA_STATUS)) {
-            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+            STATUS_PENDING_USER_ACTION -> {
                 val userIntent: Intent? =
                     intent.extras?.getParcelable(Intent.EXTRA_INTENT) as? Intent
                 if (userIntent != null) {
@@ -231,9 +408,8 @@ open class SelfUpdateReceiver : BroadcastReceiver() {
                 }
             }
 
-            PackageInstaller.STATUS_SUCCESS -> {
+            STATUS_SUCCESS -> {
                 onUpdate(context)
-
             }
 
             else -> {

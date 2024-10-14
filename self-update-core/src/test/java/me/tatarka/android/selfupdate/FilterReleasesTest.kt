@@ -42,12 +42,16 @@ class FilterReleasesTest {
             SelfUpdate.Release(
                 versionName = "1.0",
                 versionCode = 1,
+                notes = null,
+                tags = emptySet(),
                 manifestUrl = manifestUrl,
                 artifacts = emptyList(),
             ),
             SelfUpdate.Release(
                 versionName = "2.0",
                 versionCode = 2,
+                notes = null,
+                tags = emptySet(),
                 manifestUrl = manifestUrl,
                 artifacts = emptyList(),
             )
@@ -84,6 +88,8 @@ class FilterReleasesTest {
             SelfUpdate.Release(
                 versionName = "2.0",
                 versionCode = 2,
+                notes = null,
+                tags = emptySet(),
                 manifestUrl = manifestUrl,
                 artifacts = emptyList(),
             )

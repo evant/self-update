@@ -4,6 +4,7 @@ import assertk.assertThat
 import assertk.assertions.hasText
 import assertk.assertions.isEqualTo
 import kotlinx.coroutines.test.runTest
+import me.tatarka.android.selfupdate.manifest.Manifest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Rule
@@ -26,15 +27,20 @@ class DownloadTest {
             SelfUpdate.Release(
                 versionName = "1.0",
                 versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
                 manifestUrl = webServer.url("/"),
-                artifacts = listOf(me.tatarka.android.selfupdate.manifest.Manifest.Artifact("base.apk"))
+                artifacts = listOf(Manifest.Artifact("base.apk"))
             )
         )
         var apkName = ""
-        response.write(onProgress = {}) { name, _ ->
-            apkName = name
-            tempDir.resolve(name).outputStream().buffered()
-        }
+        response.write(
+            onProgress = {},
+            output = { name, _ ->
+                apkName = name
+                tempDir.resolve(name).outputStream().buffered()
+            }
+        )
 
         assertThat(tempDir.resolve(apkName))
             .hasText("base.apk")
@@ -49,18 +55,23 @@ class DownloadTest {
             SelfUpdate.Release(
                 versionName = "1.0",
                 versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
                 manifestUrl = webServer.url("/"),
                 artifacts = listOf(
-                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact("base.apk"),
-                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact("split.apk")
+                    Manifest.Artifact("base.apk"),
+                    Manifest.Artifact("split.apk")
                 )
             )
         )
         val apkNames = mutableListOf<String>()
-        response.write(onProgress = {}) { name, _ ->
-            apkNames.add(name)
-            tempDir.resolve(name).outputStream().buffered()
-        }
+        response.write(
+            onProgress = {},
+            output = { name, _ ->
+                apkNames.add(name)
+                tempDir.resolve(name).outputStream().buffered()
+            }
+        )
 
         assertThat(tempDir.resolve(apkNames[0]))
             .hasText("base.apk")
@@ -80,14 +91,19 @@ class DownloadTest {
             SelfUpdate.Release(
                 versionName = "1.0",
                 versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
                 manifestUrl = webServer.url("/"),
-                artifacts = listOf(me.tatarka.android.selfupdate.manifest.Manifest.Artifact("base.apk"))
+                artifacts = listOf(Manifest.Artifact("base.apk"))
             )
         )
         var progress = 0f
-        response.write(onProgress = { progress = it }) { _, _ ->
-            tempDir.resolve("base.apk").outputStream().buffered()
-        }
+        response.write(
+            onProgress = { progress = it },
+            output = { _, _ ->
+                tempDir.resolve("base.apk").outputStream().buffered()
+            }
+        )
 
         assertThat(progress).isEqualTo(1f)
     }
@@ -109,17 +125,22 @@ class DownloadTest {
             SelfUpdate.Release(
                 versionName = "1.0",
                 versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
                 manifestUrl = webServer.url("/"),
                 artifacts = listOf(
-                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact("base.apk"),
-                    me.tatarka.android.selfupdate.manifest.Manifest.Artifact("split.apk")
+                    Manifest.Artifact("base.apk"),
+                    Manifest.Artifact("split.apk")
                 )
             )
         )
         val progresses = mutableListOf<Float>()
-        response.write(onProgress = { progresses.add(it) }) { _, _ ->
-            tempDir.resolve("base.apk").outputStream().buffered()
-        }
+        response.write(
+            onProgress = { progresses.add(it) },
+            output = { _, _ ->
+                tempDir.resolve("base.apk").outputStream().buffered()
+            },
+        )
 
         assertThat(progresses).isEqualTo(listOf(0.5f, 1f))
     }

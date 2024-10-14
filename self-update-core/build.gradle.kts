@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         minSdk = 21
-        testInstrumentationRunner = "android.support.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -39,10 +39,13 @@ android {
 }
 
 dependencies {
-    implementation("me.tatarka.android.selfupdate:manifest:1")
+    implementation(libs.selfupdate.manifest)
     api(libs.kotlinx.coroutine)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.okhttp.await)
+    implementation(libs.annotations)
     testImplementation(libs.bundles.test)
+    androidTestImplementation(libs.bundles.test)
+    androidTestImplementation(libs.bundles.android.test)
 }

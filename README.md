@@ -115,8 +115,16 @@ An update flow works as follows:
       onlyUpgrades = true, // set false to return previous releases
    )
    ```
-2. Install a given release. Note: it's likely this will prompt the user so you should consider when
-   to do this.
+2. Optinally download a given release.
+   ```kotlin
+   try {
+      selfUpdate.download(release, onProgress = { progress -> /* Download/Install progress */})
+   } catch (e: IOException) {
+      // failed to download, calling download again will resume where it left off
+   }
+   ```
+4. Install a given release, will also download if not downloaded already.
+   Note: it's likely this will prompt the user so you should consider when to do this.
    ```kotlin
    try {
       selfUpdate.install(release, onProgress = { progress -> /* Download/Install progress */})

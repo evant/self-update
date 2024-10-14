@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
     }
 
     class MainViewModel(app: Application) : AndroidViewModel(app) {
-        private val selfUpdate = SelfUpdate(app, UpdateReceiver::class.java)
+        private val selfUpdate = SelfUpdate(app)
 
         private val releaseState = MutableStateFlow(0)
 

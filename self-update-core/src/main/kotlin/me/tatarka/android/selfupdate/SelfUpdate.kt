@@ -5,6 +5,7 @@ package me.tatarka.android.selfupdate
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
@@ -42,18 +43,21 @@ import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.math.absoluteValue
 
+private const val SelfUpdateReceiverName = "me.tatarka.android.selfupdate.SelfUpdateReceiver"
 private val CommitFlow = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
 
 class SelfUpdate internal constructor(
     private val context: Context,
-    private val receiver: Class<out BroadcastReceiver> = SelfUpdateReceiver::class.java,
     private val client: OkHttpClient = OkHttpClient(),
 ) {
 
-    constructor(
-        context: Context,
-        receiver: Class<out BroadcastReceiver> = SelfUpdateReceiver::class.java,
-    ) : this(context, receiver, OkHttpClient())
+    constructor(context: Context) : this(context, OkHttpClient())
+
+    private val receiverName = context.packageManager
+        .getPackageInfo(context.packageName, PackageManager.GET_RECEIVERS or PackageManager.GET_META_DATA)
+        .receivers.firstOrNull {
+            it.metaData?.containsKey(SelfUpdateReceiverName) == true
+        }?.name ?: SelfUpdateReceiverName
 
     private val json = Json { ignoreUnknownKeys = true }
     private var installingJob: Job? = null
@@ -145,7 +149,7 @@ class SelfUpdate internal constructor(
                     return DownloadState.None
                 }
                 // not all artifacts have been fetched
-                if (bytesWritten.size != release.artifacts.size)  {
+                if (bytesWritten.size != release.artifacts.size) {
                     return DownloadState.Partial
                 }
                 return if (bytesWritten.all { it.value < 0 }) {
@@ -324,7 +328,7 @@ class SelfUpdate internal constructor(
                     PendingIntent.getBroadcast(
                         context,
                         sessionId,
-                        Intent(context, receiver),
+                        Intent().setComponent(ComponentName(context, receiverName)),
                         PendingIntent.FLAG_MUTABLE,
                     ).intentSender
                 )

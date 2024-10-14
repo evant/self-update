@@ -153,7 +153,11 @@ You can optionally listen for update broadcasts, for example, to show a notifica
            android:name="me.tatarka.android.selfupdate.SelfUpdateReceiver"
            tools:node="remove" />
 
-       <receiver android:name=".MyUpdateReceiver" />
+       <receiver android:name=".MyUpdateReceiver">
+           <meta-data
+               android:name="me.tatarka.android.selfupdate.SelfUpdateReceiver"
+               android:value="true" />
+       </receiver>
    </application> 
    ```
 3. Pass the class to the `SelfUpdate` constructor to make sure it's called.

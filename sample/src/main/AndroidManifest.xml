@@ -23,8 +23,10 @@
             android:name="me.tatarka.android.selfupdate.SelfUpdateReceiver"
             tools:node="remove" />
 
-        <receiver android:name=".UpdateReceiver" />
-
+        <receiver android:name=".UpdateReceiver">
+            <meta-data
+                android:name="me.tatarka.android.selfupdate.SelfUpdateReceiver"
+                android:value="true" />
+        </receiver>
     </application>
-
 </manifest>

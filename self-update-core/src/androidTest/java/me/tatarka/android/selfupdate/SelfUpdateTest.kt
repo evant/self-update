@@ -203,4 +203,56 @@ class SelfUpdateTest {
             ).isEqualTo("base-x86_64.apk".toByteArray())
         }
     }
+
+    @Test
+    fun downloads_in_chunks() = runTest {
+        val release = SelfUpdate.Release(
+            versionName = "1.0",
+            versionCode = 1L,
+            notes = null,
+            tags = emptySet(),
+            manifestUrl = webServer.url("/"),
+            artifacts = listOf(Manifest.Artifact("base.apk"))
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "4")
+                .addHeader("Content-Range", "bytes 0-3/8")
+                .setResponseCode(206)
+                .setBody("base")
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "4")
+                .addHeader("Content-Range", "bytes 4-7/8")
+                .setResponseCode(206)
+                .setBody(".apk")
+        )
+        // state is none before download
+        assertThat(selfUpdate.currentDownloadState(release))
+            .isEqualTo(SelfUpdate.DownloadState.None)
+
+        selfUpdate.download(release)
+
+        // makes both requests
+        assertThat(webServer.takeRequest())
+            .prop(RecordedRequest::path).isEqualTo("/base.apk")
+        assertThat(webServer.takeRequest())
+            .prop(RecordedRequest::path).isEqualTo("/base.apk")
+
+        // state is complete
+        assertThat(selfUpdate.currentDownloadState(release))
+            .isEqualTo(SelfUpdate.DownloadState.Complete)
+
+        val session = installer.mySessions.first()
+        // size is set to Content-Length
+        assertThat(session.size).isEqualTo(8)
+        // has progress
+        assertThat(session.progress).isBetween(0f, 1f)
+        // has downloaded artifact fully
+        installer.openSession(session.sessionId).use {
+            val name = it.names.first()
+            assertThat(it.openRead(name).readAllBytes()).isEqualTo("base.apk".toByteArray())
+        }
+    }
 }

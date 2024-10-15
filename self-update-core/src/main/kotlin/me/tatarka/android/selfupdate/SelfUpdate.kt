@@ -258,8 +258,10 @@ class SelfUpdate internal constructor(
         try {
             response.write(
                 onProgress = session::setStagingProgress,
-                output = { name, size ->
-                    session.openWrite(name, 0, size)
+                output = { name, offset, size ->
+                    metadata.artifacts.getValue(name).size = size
+                    session.appMetadata = metadata.toPersistableBundle()
+                    session.openWrite(name, offset, size)
                 },
                 complete = { name, size ->
                     metadata.artifacts.getValue(name).markDownloadComplete(size)

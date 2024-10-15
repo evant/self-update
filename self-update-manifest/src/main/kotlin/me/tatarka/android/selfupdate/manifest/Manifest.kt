@@ -56,6 +56,7 @@ class Manifest(val releases: List<Release>) {
         val density: Int? = null,
         val abi: String? = null,
         val language: String? = null,
+        val checksums: List<String>? = null,
     )
 
     @Serializable

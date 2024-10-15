@@ -13,7 +13,6 @@ import android.content.pm.PackageInstaller.SessionCallback
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.os.PersistableBundle
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +40,6 @@ import okio.use
 import ru.gildor.coroutines.okhttp.await
 import java.io.IOException
 import kotlin.coroutines.resume
-import kotlin.math.absoluteValue
 
 private const val SelfUpdateReceiverName = "me.tatarka.android.selfupdate.SelfUpdateReceiver"
 private val CommitFlow = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
@@ -54,7 +52,10 @@ class SelfUpdate internal constructor(
     constructor(context: Context) : this(context, OkHttpClient())
 
     private val receiverName = context.packageManager
-        .getPackageInfo(context.packageName, PackageManager.GET_RECEIVERS or PackageManager.GET_META_DATA)
+        .getPackageInfo(
+            context.packageName,
+            PackageManager.GET_RECEIVERS or PackageManager.GET_META_DATA
+        )
         .receivers.firstOrNull {
             it.metaData?.containsKey(SelfUpdateReceiverName) == true
         }?.name ?: SelfUpdateReceiverName
@@ -142,17 +143,17 @@ class SelfUpdate internal constructor(
         // assuming a single session
         val sessionInfo = installer.mySessions.first()
         installer.openSession(sessionInfo.sessionId).use { session ->
-            if (matchMetadata(session, release)) {
+            val metadata = session.appMetadata.toReleaseMetadata()
+            if (metadata?.versionCode == release.versionCode) {
                 // check all artifacts are downloaded
-                val bytesWritten = readBytesWritten(session)
-                if (bytesWritten.isEmpty()) {
+                if (metadata.artifacts.isEmpty()) {
                     return DownloadState.None
                 }
                 // not all artifacts have been fetched
-                if (bytesWritten.size != release.artifacts.size) {
+                if (metadata.artifacts.size != release.artifacts.size) {
                     return DownloadState.Partial
                 }
-                return if (bytesWritten.all { it.value < 0 }) {
+                return if (metadata.artifacts.all { (_, value) -> value.isDownloadComplete() }) {
                     DownloadState.Complete
                 } else {
                     return DownloadState.Partial
@@ -173,26 +174,30 @@ class SelfUpdate internal constructor(
             // may already have a session, see if it's for the same release
             val sessionInfo = installer.mySessions.first()
             val session = installer.openSession(sessionInfo.sessionId)
-            if (matchMetadata(session, release)) {
-                // report current progress
+            val releaseMetadata = session.appMetadata.toReleaseMetadata()
+
+            if (releaseMetadata?.versionCode == release.versionCode) {
                 if (onProgress != null) {
                     onProgress(sessionInfo.progress)
                 }
 
-                // filter completed downloads
-                val skip = readBytesWritten(session).mapNotNull { (name, bytes) ->
-                    // negative denotes complete
-                    if (bytes < 0) name else null
-                }.toSet()
-
-                val response = download(release = release, client = client, skip = skip)
+                val response = download(
+                    release = release,
+                    metadata = releaseMetadata,
+                    client = client
+                )
+                session.appMetadata = releaseMetadata.toPersistableBundle()
 
                 watchProgress(
                     installer = installer,
                     sessionId = sessionInfo.sessionId,
                     onProgress = onProgress
                 ) {
-                    downloadArtifacts(session = session, response = response)
+                    downloadArtifacts(
+                        session = session,
+                        metadata = releaseMetadata,
+                        response = response
+                    )
                 }
 
                 return session to sessionInfo.sessionId
@@ -202,20 +207,25 @@ class SelfUpdate internal constructor(
             }
         }
 
-        val response = download(release = release, client = client)
+        val releaseMetadata = ReleaseMetadata(release.versionCode)
+        val response = download(release = release, metadata = releaseMetadata, client = client)
         val sessionId = installer.createSession(
             uri = Uri.parse(release.manifestUrl.toString()),
             estimatedSize = response.estimatedSize
         )
         val session = installer.openSession(sessionId)
-        recordMetadata(session, release)
+        session.appMetadata = releaseMetadata.toPersistableBundle()
 
         watchProgress(
             installer = installer,
             sessionId = sessionId,
             onProgress = onProgress,
         ) {
-            downloadArtifacts(session = session, response = response)
+            downloadArtifacts(
+                session = session,
+                metadata = releaseMetadata,
+                response = response
+            )
         }
 
         return session to sessionId
@@ -242,6 +252,7 @@ class SelfUpdate internal constructor(
 
     private suspend fun downloadArtifacts(
         session: PackageInstallerCompat.Session,
+        metadata: ReleaseMetadata,
         response: DownloadResponse,
     ) {
         try {
@@ -251,7 +262,8 @@ class SelfUpdate internal constructor(
                     session.openWrite(name, 0, size)
                 },
                 complete = { name, size ->
-                    recordBytesWritten(session, name, size, complete = true)
+                    metadata.artifacts.getValue(name).markDownloadComplete(size)
+                    session.appMetadata = metadata.toPersistableBundle()
                 }
             )
         } catch (e: CancellationException) {
@@ -261,36 +273,6 @@ class SelfUpdate internal constructor(
             session.close()
             throw e
         }
-    }
-
-    private fun recordMetadata(session: PackageInstallerCompat.Session, release: Release) {
-        session.appMetadata = PersistableBundle().apply {
-            putLong("versionCode", release.versionCode)
-        }
-    }
-
-    private fun recordBytesWritten(
-        session: PackageInstallerCompat.Session,
-        name: String,
-        size: Long,
-        complete: Boolean,
-    ) {
-        val bundle = session.appMetadata
-        val downloaded = bundle.getPersistableBundle("downloaded") ?: PersistableBundle()
-        downloaded.putLong(name, if (complete) -size.absoluteValue else size)
-        bundle.putPersistableBundle("downloaded", downloaded)
-        session.appMetadata = bundle
-    }
-
-    private fun readBytesWritten(session: PackageInstallerCompat.Session): Map<String, Long> {
-        val downloaded = session.appMetadata.getPersistableBundle("downloaded") ?: return emptyMap()
-        return downloaded.keySet().associateWith { name -> downloaded.getLong(name) }
-    }
-
-    private fun matchMetadata(session: PackageInstallerCompat.Session, release: Release): Boolean {
-        val metadata = session.appMetadata
-        val versionCode = metadata.getLong("versionCode")
-        return release.versionCode == versionCode
     }
 
     suspend fun delete(release: Release) {
@@ -399,6 +381,8 @@ class SelfUpdate internal constructor(
         )
     }
 }
+
+
 
 open class SelfUpdateReceiver : BroadcastReceiver() {
     final override fun onReceive(context: Context, intent: Intent?) {

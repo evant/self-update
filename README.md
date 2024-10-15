@@ -212,7 +212,14 @@ hand or generate it using some other method.
                // The density (dpi) for this artifact. (optional)
                "density": 320,
                // The language for this artifact. (optional)
-               "language": "en"
+               "language": "en",
+               // The apk checksums are returned from apksigner. (optional)
+               // The format is: signingVersion:algorithm:base64encodedValue
+               // Currently v2:sha256 & v2:sha512 are supported.
+               // While this argument is optional it is highly recommend you provide it.
+               "checksums": [
+                  "v2:sha256:"
+               ]
             }
          ]
       }

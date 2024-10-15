@@ -160,10 +160,6 @@ You can optionally listen for update broadcasts, for example, to show a notifica
        </receiver>
    </application> 
    ```
-3. Pass the class to the `SelfUpdate` constructor to make sure it's called.
-   ```kotlin
-   val selfUpdate = SelfUpdate(context, MyUpdateReceiver::class.java)
-   ```
 
 ### Manifest Format
 

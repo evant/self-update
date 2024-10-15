@@ -15,16 +15,30 @@ import java.io.OutputStream
 
 internal suspend fun download(
     release: Release,
-    skip: Set<String> = emptySet(),
+    metadata: ReleaseMetadata,
     client: OkHttpClient = OkHttpClient()
 ): DownloadResponse {
     val artifactResponses = mutableListOf<ArtifactResponse>()
-    val artifactNamer = ArtifactNamer(release.versionCode)
+    val artifactNamer = ArtifactNamer()
+    val sameVersion = release.versionCode == metadata.versionCode
     for (artifact in release.artifacts) {
         val path = artifact.path
         val url = release.manifestUrl.relativePath(path)
         val name = artifactNamer.name(url)
-        if (name !in skip) {
+        val shouldDownload = if (sameVersion) {
+            val artifactMetadata = metadata.artifacts[name] ?: ReleaseMetadata.ArtifactMetadata().also {
+                it.checksum = artifact.checksums?.firstOrNull()
+                metadata.artifacts[name] = it
+            }
+            if (artifactMetadata.checksum != artifact.checksums?.firstOrNull()) {
+                // checksums don't match, mark for re-download
+                artifactMetadata.bytesWritten = 0
+            }
+            !artifactMetadata.isDownloadComplete()
+        } else {
+            true
+        }
+        if (shouldDownload) {
             val response = client.newCall(Request.Builder().url(url).build()).await()
             val body = response.ensureBody()
             val size = response.header("Content-Length")?.toLong() ?: 0
@@ -96,12 +110,13 @@ private fun HttpUrl.relativePath(path: String): HttpUrl {
     }
 }
 
-private class ArtifactNamer(private val versionCode: Long) {
+
+private class ArtifactNamer {
     private var index = 0
 
     fun name(url: HttpUrl): String {
         val simpleName = url.pathSegments.last().removeSuffix(".apk")
-        val uniqueName = "${simpleName}_${index}_${versionCode}.apk"
+        val uniqueName = "${simpleName}_${index}.apk"
         index += 1
         return uniqueName
     }

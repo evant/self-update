@@ -1,5 +1,8 @@
 package me.tatarka.android.selfupdate.gradle
 
+import com.android.apksig.ApkVerifier
+import com.android.apksig.internal.apk.ApkSigningBlockUtils
+import com.android.apksig.internal.apk.ContentDigestAlgorithm
 import com.android.bundle.Commands.BuildApksResult
 import com.android.bundle.Targeting
 import com.android.bundle.Targeting.AbiTargeting
@@ -8,6 +11,7 @@ import com.android.bundle.Targeting.ScreenDensityTargeting
 import com.android.tools.build.bundletool.model.utils.ResourcesUtils
 import me.tatarka.android.selfupdate.manifest.Manifest
 import java.io.File
+import java.util.Base64
 
 internal fun parseArtifactMetadata(
     path: File,
@@ -23,6 +27,8 @@ internal fun parseArtifactMetadata(
                 for (description in apkSet.apkDescriptionList) {
                     val artifactPath = rename(description.path)
                     if (none { it.path == artifactPath }) {
+                        val apkFile = path.parentFile.resolve(description.path)
+                        val checksums = checksums(apkFile)
                         add(
                             Manifest.Artifact(
                                 path = artifactPath,
@@ -31,13 +37,32 @@ internal fun parseArtifactMetadata(
                                     ?: variant.targeting.abiTargeting)?.let { abiName(it) },
                                 density = (description.targeting.screenDensityTargeting
                                     ?: variant.targeting.screenDensityTargeting)?.let { density(it) },
-                                language = description.targeting.languageTargeting?.let { language(it) }
+                                language = description.targeting.languageTargeting?.let {
+                                    language(
+                                        it
+                                    )
+                                },
+                                checksums = checksums.ifEmpty { null },
                             )
                         )
                     }
                 }
             }
         }
+    }
+}
+
+private fun checksums(path: File): List<String> {
+    val result = ApkVerifier.Builder(path).build().verify()
+    val digests = ApkVerifier.getContentDigestsFromResult(result, ApkSigningBlockUtils.VERSION_APK_SIGNATURE_SCHEME_V2)
+    val base64 = Base64.getEncoder().withoutPadding()
+    return digests.mapNotNull { (algorithm, data) ->
+        val prefix = when (algorithm) {
+            ContentDigestAlgorithm.CHUNKED_SHA256 -> "v2:sha256:"
+            ContentDigestAlgorithm.CHUNKED_SHA512 -> "v2:sha512:"
+            else -> return@mapNotNull null
+        }
+        prefix + base64.encodeToString(data)
     }
 }
 

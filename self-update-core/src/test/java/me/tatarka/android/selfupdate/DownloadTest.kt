@@ -1,6 +1,8 @@
 package me.tatarka.android.selfupdate
 
 import assertk.assertThat
+import assertk.assertions.containsExactly
+import assertk.assertions.hasSize
 import assertk.assertions.hasText
 import assertk.assertions.isEqualTo
 import kotlinx.coroutines.test.runTest
@@ -31,7 +33,8 @@ class DownloadTest {
                 tags = emptySet(),
                 manifestUrl = webServer.url("/"),
                 artifacts = listOf(Manifest.Artifact("base.apk"))
-            )
+            ),
+            metadata = ReleaseMetadata(versionCode = 1)
         )
         var apkName = ""
         response.write(
@@ -61,8 +64,9 @@ class DownloadTest {
                 artifacts = listOf(
                     Manifest.Artifact("base.apk"),
                     Manifest.Artifact("split.apk")
-                )
-            )
+                ),
+            ),
+            metadata = ReleaseMetadata(versionCode = 1)
         )
         val apkNames = mutableListOf<String>()
         response.write(
@@ -95,7 +99,8 @@ class DownloadTest {
                 tags = emptySet(),
                 manifestUrl = webServer.url("/"),
                 artifacts = listOf(Manifest.Artifact("base.apk"))
-            )
+            ),
+            metadata = ReleaseMetadata(versionCode = 1)
         )
         var progress = 0f
         response.write(
@@ -117,7 +122,7 @@ class DownloadTest {
         )
         webServer.enqueue(
             MockResponse()
-                .setHeader("Content-Length", "8")
+                .setHeader("Content-Length", "9")
                 .setBody("split.apk")
         )
 
@@ -132,7 +137,8 @@ class DownloadTest {
                     Manifest.Artifact("base.apk"),
                     Manifest.Artifact("split.apk")
                 )
-            )
+            ),
+            metadata = ReleaseMetadata(versionCode = 1)
         )
         val progresses = mutableListOf<Float>()
         response.write(
@@ -143,5 +149,127 @@ class DownloadTest {
         )
 
         assertThat(progresses).isEqualTo(listOf(0.5f, 1f))
+    }
+
+    @Test
+    fun skips_artifacts_with_completed_download() = runTest {
+        webServer.enqueue(
+            MockResponse()
+                .setHeader("Content-Length", "9")
+                .setBody("split.apk")
+        )
+
+        val metadata = ReleaseMetadata(versionCode = 1).apply {
+            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
+                markDownloadComplete(8)
+            }
+        }
+
+        val response = download(
+            SelfUpdate.Release(
+                versionName = "1.0",
+                versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
+                manifestUrl = webServer.url("/"),
+                artifacts = listOf(
+                    Manifest.Artifact("base.apk"),
+                    Manifest.Artifact("split.apk"),
+                )
+            ),
+            metadata = metadata
+        )
+
+        val apkNames = mutableListOf<String>()
+        response.write(
+            onProgress = {},
+            output = { name, _ ->
+                apkNames.add(name)
+                tempDir.resolve(name).outputStream().buffered()
+            }
+        )
+
+        assertThat(apkNames).hasSize(1)
+        assertThat(tempDir.resolve(apkNames[0]))
+            .hasText("split.apk")
+    }
+
+    @Test
+    fun redownloads_artifacts_if_version_code_changes() = runTest {
+        webServer.enqueue(
+            MockResponse()
+                .setHeader("Content-Length", "8")
+                .setBody("base.apk")
+        )
+
+        val metadata = ReleaseMetadata(versionCode = 1).apply {
+            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
+                markDownloadComplete(8)
+            }
+        }
+
+        val response = download(
+            SelfUpdate.Release(
+                versionName = "1.0",
+                versionCode = 2L,
+                notes = null,
+                tags = emptySet(),
+                manifestUrl = webServer.url("/"),
+                artifacts = listOf(Manifest.Artifact("base.apk"))
+            ),
+            metadata = metadata
+        )
+
+        var apkName = ""
+        response.write(
+            onProgress = {},
+            output = { name, _ ->
+                apkName = name
+                tempDir.resolve(name).outputStream().buffered()
+            }
+        )
+
+        assertThat(tempDir.resolve(apkName))
+            .hasText("base.apk")
+    }
+
+    @Test
+    fun redownloads_if_checksums_dont_match() = runTest {
+        webServer.enqueue(
+            MockResponse()
+                .setHeader("Content-Length", "8")
+                .setBody("base.apk")
+        )
+
+        val metadata = ReleaseMetadata(versionCode = 1).apply {
+            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
+                markDownloadComplete(8)
+                checksum = "a"
+            }
+        }
+
+        val response = download(
+            SelfUpdate.Release(
+                versionName = "1.0",
+                versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
+                manifestUrl = webServer.url("/"),
+                artifacts = listOf(Manifest.Artifact("base.apk", checksums = listOf("b")))
+            ),
+            metadata = metadata
+        )
+
+        var apkName = ""
+        response.write(
+            onProgress = {},
+            output = { name, _ ->
+                apkName = name
+                tempDir.resolve(name).outputStream().buffered()
+            }
+        )
+
+        assertThat(tempDir.resolve(apkName))
+            .hasText("base.apk")
     }
 }

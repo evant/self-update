@@ -1,7 +1,6 @@
 package me.tatarka.android.selfupdate
 
 import assertk.assertThat
-import assertk.assertions.containsExactly
 import assertk.assertions.hasSize
 import assertk.assertions.hasText
 import assertk.assertions.isEqualTo
@@ -12,6 +11,8 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Rule
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import kotlin.test.Test
 
 class DownloadTest {
@@ -39,7 +40,7 @@ class DownloadTest {
         var apkName = ""
         response.write(
             onProgress = {},
-            output = { name, _ ->
+            output = { name, _, _ ->
                 apkName = name
                 tempDir.resolve(name).outputStream().buffered()
             }
@@ -71,7 +72,7 @@ class DownloadTest {
         val apkNames = mutableListOf<String>()
         response.write(
             onProgress = {},
-            output = { name, _ ->
+            output = { name, _, _ ->
                 apkNames.add(name)
                 tempDir.resolve(name).outputStream().buffered()
             }
@@ -105,7 +106,7 @@ class DownloadTest {
         var progress = 0f
         response.write(
             onProgress = { progress = it },
-            output = { _, _ ->
+            output = { _, _, _ ->
                 tempDir.resolve("base.apk").outputStream().buffered()
             }
         )
@@ -143,7 +144,7 @@ class DownloadTest {
         val progresses = mutableListOf<Float>()
         response.write(
             onProgress = { progresses.add(it) },
-            output = { _, _ ->
+            output = { _, _, _ ->
                 tempDir.resolve("base.apk").outputStream().buffered()
             },
         )
@@ -183,7 +184,7 @@ class DownloadTest {
         val apkNames = mutableListOf<String>()
         response.write(
             onProgress = {},
-            output = { name, _ ->
+            output = { name, _, _ ->
                 apkNames.add(name)
                 tempDir.resolve(name).outputStream().buffered()
             }
@@ -223,7 +224,7 @@ class DownloadTest {
         var apkName = ""
         response.write(
             onProgress = {},
-            output = { name, _ ->
+            output = { name, _, _ ->
                 apkName = name
                 tempDir.resolve(name).outputStream().buffered()
             }
@@ -263,9 +264,161 @@ class DownloadTest {
         var apkName = ""
         response.write(
             onProgress = {},
-            output = { name, _ ->
+            output = { name, _, _ ->
                 apkName = name
                 tempDir.resolve(name).outputStream().buffered()
+            }
+        )
+
+        assertThat(tempDir.resolve(apkName))
+            .hasText("base.apk")
+    }
+
+    @Test
+    fun resume_download_with_range_request_if_server_supports_it() = runTest {
+        webServer.enqueue(
+            MockResponse()
+                .setHeader("Content-Length", "8")
+                .setHeader("Content-Range", "bytes 4-7/8")
+                .setResponseCode(206)
+                .setBody(".apk")
+        )
+
+        val metadata = ReleaseMetadata(versionCode = 1).apply {
+            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
+                bytesWritten = 4
+            }
+        }
+
+        tempDir.resolve("base_0.apk").writeText("base")
+
+        val response = download(
+            SelfUpdate.Release(
+                versionName = "1.0",
+                versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
+                manifestUrl = webServer.url("/"),
+                artifacts = listOf(Manifest.Artifact("base.apk"))
+            ),
+            metadata = metadata
+        )
+
+        var apkName = ""
+        var apkOffset = -1L
+        var apkSize = -1L
+        response.write(
+            onProgress = {},
+            output = { name, offset, size ->
+                apkName = name
+                apkOffset = offset
+                apkSize = size
+                FileOutputStream(RandomAccessFile(tempDir.resolve(name), "rw").apply {
+                    seek(offset)
+                }.fd).buffered()
+            }
+        )
+
+        assertThat(webServer.takeRequest().getHeader("Range"))
+            .isEqualTo("bytes=4-")
+
+        assertThat(apkOffset).isEqualTo(4)
+        assertThat(apkSize).isEqualTo(8)
+
+        assertThat(tempDir.resolve(apkName))
+            .hasText("base.apk")
+    }
+
+    @Test
+    fun resumes_download_with_range_request_if_content_length_header_is_missing() = runTest {
+        webServer.enqueue(
+            MockResponse()
+                .setHeader("Content-Range", "bytes 4-7/8")
+                .setResponseCode(206)
+                .setBody(".apk")
+        )
+
+        val metadata = ReleaseMetadata(versionCode = 1).apply {
+            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
+                bytesWritten = 4
+            }
+        }
+
+        tempDir.resolve("base_0.apk").writeText("base")
+
+        val response = download(
+            SelfUpdate.Release(
+                versionName = "1.0",
+                versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
+                manifestUrl = webServer.url("/"),
+                artifacts = listOf(Manifest.Artifact("base.apk"))
+            ),
+            metadata = metadata
+        )
+
+        var apkName = ""
+        response.write(
+            onProgress = {},
+            output = { name, offset, _ ->
+                apkName = name
+                FileOutputStream(RandomAccessFile(tempDir.resolve(name), "rw").apply {
+                    seek(offset)
+                }.fd).buffered()
+            }
+        )
+
+        assertThat(webServer.takeRequest().getHeader("Range"))
+            .isEqualTo("bytes=4-")
+
+        assertThat(tempDir.resolve(apkName))
+            .hasText("base.apk")
+    }
+
+    @Test
+    fun makes_multiple_requests_if_server_decides_to_chunk_response() = runTest {
+        webServer.enqueue(
+            MockResponse()
+                .setHeader("Content-Length", "4")
+                .setHeader("Content-Range", "bytes 0-3/8")
+                .setResponseCode(206)
+                .setBody("base")
+        )
+        webServer.enqueue(
+            MockResponse()
+                .setHeader("Content-Length", "4")
+                .setHeader("Content-Range", "bytes 4-7/8")
+                .setResponseCode(206)
+                .setBody(".apk")
+        )
+
+        val metadata = ReleaseMetadata(versionCode = 1).apply {
+            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
+                bytesWritten = 4
+            }
+        }
+
+        val response = download(
+            SelfUpdate.Release(
+                versionName = "1.0",
+                versionCode = 1L,
+                notes = null,
+                tags = emptySet(),
+                manifestUrl = webServer.url("/"),
+                artifacts = listOf(Manifest.Artifact("base.apk"))
+            ),
+            metadata = metadata
+        )
+
+        var apkName = ""
+        response.write(
+            onProgress = {},
+            output = { name, offset, _ ->
+                apkName = name
+                FileOutputStream(RandomAccessFile(tempDir.resolve(name), "rw").apply {
+                    seek(offset)
+                }.fd).buffered()
             }
         )
 

@@ -4,19 +4,21 @@ plugins {
     `kotlin-dsl`
     `java-gradle-plugin`
     embeddedKotlin("plugin.serialization")
+    alias(libs.plugins.conventions.publish)
 }
 
 dependencies {
     implementation(libs.selfupdate.manifest)
     implementation(libs.android.gradle)
-    implementation("com.android.tools.build:bundletool:1.17.1")
-    implementation("com.google.protobuf:protobuf-java:3.22.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    api(kotlin("gradle-plugin:1.9.20"))
+    implementation(libs.bundletool)
+    implementation(libs.protobuf)
+    implementation(libs.kotlinx.serialization.json)
+    api(libs.kotlin.gradle)
 }
 
 java {
-    targetCompatibility = JavaVersion.VERSION_11
+    withSourcesJar()
+    withJavadocJar()
 }
 
 kotlin {
@@ -28,8 +30,61 @@ kotlin {
 gradlePlugin {
     plugins {
         create("selfUpdate") {
-            id = "me.tatarka.android.selfupdate"
+            id = group.toString()
             implementationClass = "me.tatarka.android.selfupdate.gradle.SelfUpdatePlugin"
         }
+    }
+    isAutomatedPublishing = false
+}
+
+val emptyJavadocJar = tasks.register<Jar>("emptyJavadocJar") {
+    destinationDirectory = layout.buildDirectory.dir("libs-marker")
+    archiveClassifier.set("javadoc")
+}
+
+val emptySourceJar = tasks.register<Jar>("emptySourceJar"){
+    destinationDirectory = layout.buildDirectory.dir("libs-marker")
+    archiveClassifier.set("source")
+}
+
+publishing {
+    publications {
+        named<MavenPublication>("release").configure {
+            from(components["java"])
+        }
+        register<MavenPublication>("releasePluginMarkerMaven").configure {
+            artifactId = "$groupId.gradle.plugin"
+            artifact(emptyJavadocJar)
+            artifact(emptySourceJar)
+            pom {
+                mavenCentralPom()
+                withXml {
+                    val root = asElement()
+                    val document = root.ownerDocument
+                    val dependencies = root.appendChild(document.createElement("dependencies"))
+                    val dependency = dependencies.appendChild(document.createElement("dependency"))
+                    val groupId = dependency.appendChild(document.createElement("groupId"))
+                    groupId.textContent = this@configure.groupId
+                    val artifactId = dependency.appendChild(document.createElement("artifactId"))
+                    artifactId.textContent = this@configure.artifactId
+                    val version = dependency.appendChild(document.createElement("version"))
+                    version.textContent = this@configure.version
+                }
+            }
+        }
+        repositories {
+            gradlePluginPortal {
+                name = "gradle-plugin-portal"
+            }
+        }
+    }
+}
+
+listOf(
+    "publish",
+    "publishToMavenLocal"
+).forEach { task ->
+    rootProject.tasks.named(task).configure {
+        dependsOn(tasks.named(task))
     }
 }

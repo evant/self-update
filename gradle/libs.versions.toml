@@ -1,6 +1,9 @@
 [versions]
+version = "0.1.0"
 android = "8.6.1"
 kotlin = "1.9.20"
+nexus-publishing = "2.0.0"
+jvmTarget = "11"
 
 [libraries]
 selfupdate-manifest = { module = "me.tatarka.android.selfupdate:manifest" }
@@ -11,28 +14,36 @@ kotlinx-coroutine-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-te
 okhttp = { module = "com.squareup.okhttp3:okhttp", version = "4.12.0" }
 okhttp-await = { module = "ru.gildor.coroutines:kotlin-coroutines-okhttp", version = "1.0" }
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version = "4.12.0" }
-compose-bom = { module = "androidx.compose:compose-bom", version = "2024.09.01" }
+compose-bom = { module = "androidx.compose:compose-bom", version = "2024.10.00" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-tooling-ui = { module = "androidx.compose.ui:ui-tooling" }
-compose-activity = { module = "androidx.activity:activity-compose" }
 compose-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose" }
-activity-ktx = { module = "androidx.activity:activity-ktx" }
+activity-ktx = { module = "androidx.activity:activity-ktx", version = "1.9.3" }
+compose-activity = { module = "androidx.activity:activity-compose", version = "1.9.3" }
 annotations = { module = "androidx.annotation:annotation", version = "1.0.0" }
 assertk = { module = "com.willowtreeapps.assertk:assertk", version = "0.28.0" }
 test-runner = { module = "androidx.test:runner", version = "1.6.2" }
 test-rules = { module = "androidx.test:rules", version = "1.6.1" }
 test-junit = { module = "androidx.test.ext:junit", version = "1.2.1" }
+bundletool = { module = "com.android.tools.build:bundletool", version = "1.17.1" }
+protobuf = { module = "com.google.protobuf:protobuf-java", version = "3.22.3" }
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android" }
+kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+nexus-publishing-gradle = { module = "io.github.gradle-nexus:publish-plugin", version.ref = "nexus-publishing" }
 
 [bundles]
 test = ["kotlin-test", "assertk", "okhttp-mockwebserver", "kotlinx-coroutine-test"]
 android-test = ["test-runner", "test-rules", "test-junit"]
 
 [plugins]
+conventions-base = { id = "conventions.base" }
+conventions-root = { id = "conventions.root" }
+conventions-publish = { id = "conventions.publish" }
 selfupdate-gradle = { id = "me.tatarka.android.selfupdate" }
 android-application = { id = "com.android.application", version.ref = "android" }
 android-library = { id = "com.android.library", version.ref = "android" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+nexus-publishing = { id = "io.github.gradle-nexus.publish-plugin", version.ref = "nexus-publishing" }

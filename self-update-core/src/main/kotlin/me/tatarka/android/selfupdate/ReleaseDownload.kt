@@ -3,7 +3,6 @@ package me.tatarka.android.selfupdate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
-import me.tatarka.android.selfupdate.SelfUpdate.Release
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -15,35 +14,17 @@ import java.io.IOException
 import java.io.OutputStream
 
 internal suspend fun download(
-    release: Release,
-    metadata: ReleaseMetadata,
+    artifacts: Map<String, ArtifactState>,
     client: OkHttpClient = OkHttpClient()
 ): DownloadResponse {
     val artifactResponses = mutableListOf<ArtifactResponse>()
-    val artifactNamer = ArtifactNamer()
-    val sameVersion = release.versionCode == metadata.versionCode
-    for (artifact in release.artifacts) {
-        val path = artifact.path
-        val url = release.manifestUrl.relativePath(path)
-        val name = artifactNamer.name(url)
-        val artifactMetadata = metadata.artifacts[name] ?: ReleaseMetadata.ArtifactMetadata().also {
-            it.checksum = artifact.checksums?.firstOrNull()
-            metadata.artifacts[name] = it
-        }
-        val shouldDownload = if (sameVersion) {
-            if (artifactMetadata.checksum != artifact.checksums?.firstOrNull()) {
-                // checksums don't match, mark for re-download
-                artifactMetadata.bytesWritten = 0
-            }
-            !artifactMetadata.isDownloadComplete()
-        } else {
-            true
-        }
+    for ((name, artifact) in artifacts) {
+        val shouldDownload = !artifact.bytesWritten.complete
         if (shouldDownload) {
             val response = requestArtifact(
                 name = name,
-                url = url,
-                bytesWritten = artifactMetadata.bytesWritten,
+                url = artifact.url,
+                bytesWritten = artifact.bytesWritten,
                 client = client,
             )
             artifactResponses.add(response)
@@ -55,7 +36,7 @@ internal suspend fun download(
 private suspend fun requestArtifact(
     name: String,
     url: HttpUrl,
-    bytesWritten: Long,
+    bytesWritten: BytesWritten,
     client: OkHttpClient
 ): ArtifactResponse {
     val response = client.newCall(
@@ -70,15 +51,15 @@ private suspend fun requestArtifact(
     val body = response.ensureBody()
     val contentSize = response.header("Content-Length")?.toLong() ?: -1
     val rangeHeader = response.header("Content-Range")
-    val bytesWritten: Long
+    val bytesWritten: BytesWritten
     val size: Long
     if (response.code == 206 && rangeHeader != null) {
         val range = parseRangeHeader(rangeHeader)
-        bytesWritten = range.start
+        bytesWritten = BytesWritten(range.start)
         size = range.size
     } else {
         // Range request not supported, expect full response
-        bytesWritten = 0L
+        bytesWritten = BytesWritten.Zero
         size = contentSize
     }
     return ArtifactResponse(
@@ -119,7 +100,7 @@ private class Range(
 
 internal class DownloadResponse internal constructor(
     private val client: OkHttpClient,
-    private val artifactResponses: List<ArtifactResponse>
+    val artifactResponses: List<ArtifactResponse>
 ) {
     val estimatedSize: Long
         get() = artifactResponses.sumOf { it.size }
@@ -138,7 +119,7 @@ internal class DownloadResponse internal constructor(
                     yield()
                     val actualContentSize = output(
                         currentResponse.name,
-                        currentResponse.bytesWritten,
+                        currentResponse.bytesWritten.bytes,
                         currentResponse.size,
                     ).use { dest ->
                         currentResponse.body.byteStream().buffered().use { src ->
@@ -146,7 +127,7 @@ internal class DownloadResponse internal constructor(
                                 src.copyTo(
                                     ProgressOutputStream(
                                         dest,
-                                        currentResponse.bytesWritten,
+                                        currentResponse.bytesWritten.bytes,
                                         currentResponse.size
                                     ) {
                                         onProgress(it * (index + 1) / artifactCount)
@@ -199,22 +180,11 @@ private fun HttpUrl.relativePath(path: String): HttpUrl {
 }
 
 
-private class ArtifactNamer {
-    private var index = 0
-
-    fun name(url: HttpUrl): String {
-        val simpleName = url.pathSegments.last().removeSuffix(".apk")
-        val uniqueName = "${simpleName}_${index}.apk"
-        index += 1
-        return uniqueName
-    }
-}
-
 internal class ArtifactResponse(
     val name: String,
     val url: HttpUrl,
     val size: Long,
-    val bytesWritten: Long,
+    val bytesWritten: BytesWritten,
     val body: ResponseBody,
 )
 

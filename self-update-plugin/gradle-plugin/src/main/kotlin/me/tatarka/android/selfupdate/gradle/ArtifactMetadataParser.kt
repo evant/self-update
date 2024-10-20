@@ -55,7 +55,7 @@ internal fun parseArtifactMetadata(
 private fun checksums(path: File): List<String> {
     val result = ApkVerifier.Builder(path).build().verify()
     val digests = ApkVerifier.getContentDigestsFromResult(result, ApkSigningBlockUtils.VERSION_APK_SIGNATURE_SCHEME_V2)
-    val base64 = Base64.getEncoder().withoutPadding()
+    val base64 = Base64.getUrlEncoder().withoutPadding()
     return digests.mapNotNull { (algorithm, data) ->
         val prefix = when (algorithm) {
             ContentDigestAlgorithm.CHUNKED_SHA256 -> "v2:sha256:"

@@ -1,10 +1,9 @@
-package me.tatarka.android.selfupdate
+package me.tatarka.android.selfupdate.compat
 
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.IntentSender
 import android.content.pm.PackageInstaller
-import android.content.pm.PackageInstaller.SessionCallback
 import android.net.Uri
 import android.os.Build
 import android.os.PersistableBundle
@@ -12,6 +11,7 @@ import androidx.annotation.RequiresApi
 import androidx.annotation.WorkerThread
 import okio.withLock
 import java.io.File
+import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.locks.ReentrantLock
@@ -26,29 +26,38 @@ internal class PackageInstallerCompat private constructor(private val context: C
         }
     }
 
-    val mySessions: List<SessionInfo> get() = installer.mySessions.map { SessionInfo(it) }
+    val mySessions: List<SessionInfo> get() = installer.mySessions.map { createSessionInfo(it) }
 
     fun openSession(sessionId: Int): Session =
         createSession(sessionId, installer.openSession(sessionId))
 
     fun createSession(params: SessionParams): Int {
-        //TODO: SessionParams compat
-        return installer.createSession(params.params)
+        val sessionId = installer.createSession(params.params)
+        if (Build.VERSION.SDK_INT < 27) {
+            val state = PersistableBundleState.getInstance(context)
+            // save size
+            val bundle = state.getBundle()
+            bundle.putLong("${sessionId}_size", params.size)
+            state.setBundle(bundle)
+        }
+        return sessionId
     }
 
     fun getSessionInfo(sessionId: Int): SessionInfo? =
-        installer.getSessionInfo(sessionId)?.let { SessionInfo(it) }
+        installer.getSessionInfo(sessionId)?.let { createSessionInfo(it) }
 
-    fun registerSessionCallback(callback: SessionCallback) {
+    fun registerSessionCallback(callback: PackageInstaller.SessionCallback) {
         installer.registerSessionCallback(callback)
     }
 
-    fun unregisterSessionCallback(callback: SessionCallback) {
+    fun unregisterSessionCallback(callback: PackageInstaller.SessionCallback) {
         installer.unregisterSessionCallback(callback)
     }
 
     class SessionParams(mode: Int) {
         internal val params = PackageInstaller.SessionParams(mode)
+        internal var size: Long = 0
+            private set
 
         init {
             if (Build.VERSION.SDK_INT == 30) {
@@ -66,6 +75,7 @@ internal class PackageInstallerCompat private constructor(private val context: C
         }
 
         fun setSize(sizeBytes: Long) {
+            size = sizeBytes
             params.setSize(sizeBytes)
         }
 
@@ -104,9 +114,31 @@ internal class PackageInstallerCompat private constructor(private val context: C
         }
     }
 
-    class SessionInfo(private val info: PackageInstaller.SessionInfo) {
+    private fun createSessionInfo(
+        info: PackageInstaller.SessionInfo
+    ): SessionInfo = if (Build.VERSION.SDK_INT >= 27) {
+        SessionInfoApi27(info)
+    } else {
+        SessionInfoApi(info)
+    }
+
+    sealed class SessionInfo(protected val info: PackageInstaller.SessionInfo) {
         val sessionId: Int get() = info.sessionId
         val progress: Float get() = info.progress
+        abstract val size: Long
+    }
+
+    @RequiresApi(27)
+    private class SessionInfoApi27(info: PackageInstaller.SessionInfo) : SessionInfo(info) {
+        override val size: Long
+            get() = info.size
+    }
+
+    private inner class SessionInfoApi(info: PackageInstaller.SessionInfo) : SessionInfo(info) {
+        private val state = PersistableBundleState.getInstance(context)
+
+        override val size: Long
+            get() = state.getBundle().getLong("${info.sessionId}_size")
     }
 
     private fun createSession(
@@ -118,13 +150,23 @@ internal class PackageInstallerCompat private constructor(private val context: C
         SessionApi(context, sessionId, session)
     }
 
+    fun abandonSession(sessionId: Int) {
+        installer.abandonSession(sessionId)
+    }
+
     sealed class Session(protected val session: PackageInstaller.Session) : AutoCloseable {
+
+        val names: Array<String>
+            get() = session.names
 
         abstract var appMetadata: PersistableBundle
 
         fun setStagingProgress(progress: Float) {
             session.setStagingProgress(progress)
         }
+
+        fun openRead(name: String): InputStream =
+            session.openRead(name)
 
         fun openWrite(name: String, offsetBytes: Long, lengthBytes: Long): OutputStream =
             session.openWrite(name, offsetBytes, lengthBytes)

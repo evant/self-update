@@ -26,10 +26,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
-import me.tatarka.android.selfupdate.PackageInstallerCompat.Companion.EXTRA_STATUS
-import me.tatarka.android.selfupdate.PackageInstallerCompat.Companion.EXTRA_STATUS_MESSAGE
-import me.tatarka.android.selfupdate.PackageInstallerCompat.Companion.STATUS_PENDING_USER_ACTION
-import me.tatarka.android.selfupdate.PackageInstallerCompat.Companion.STATUS_SUCCESS
+import me.tatarka.android.selfupdate.compat.PackageInstallerCompat
+import me.tatarka.android.selfupdate.compat.PackageInstallerCompat.Companion.EXTRA_STATUS
+import me.tatarka.android.selfupdate.compat.PackageInstallerCompat.Companion.EXTRA_STATUS_MESSAGE
+import me.tatarka.android.selfupdate.compat.PackageInstallerCompat.Companion.STATUS_PENDING_USER_ACTION
+import me.tatarka.android.selfupdate.compat.PackageInstallerCompat.Companion.STATUS_SUCCESS
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -153,7 +154,7 @@ class SelfUpdate internal constructor(
                 if (metadata.artifacts.size != release.artifacts.size) {
                     return DownloadState.Partial
                 }
-                return if (metadata.artifacts.all { (_, value) -> value.isDownloadComplete() }) {
+                return if (metadata.artifacts.all { (_, value) -> value.bytesWritten.complete }) {
                     DownloadState.Complete
                 } else {
                     return DownloadState.Partial
@@ -175,17 +176,24 @@ class SelfUpdate internal constructor(
             val sessionInfo = installer.mySessions.first()
             val session = installer.openSession(sessionInfo.sessionId)
             val releaseMetadata = session.appMetadata.toReleaseMetadata()
+                ?: ReleaseMetadata(release.versionCode)
 
-            if (releaseMetadata?.versionCode == release.versionCode) {
+            val artifacts = artifactStates(
+                manifestUrl = release.manifestUrl,
+                artifacts = release.artifacts,
+                metadata = releaseMetadata.artifacts,
+            )
+
+            if (canReuseSession(release.versionCode, artifacts.keys, releaseMetadata)) {
                 if (onProgress != null) {
                     onProgress(sessionInfo.progress)
                 }
 
                 val response = download(
-                    release = release,
-                    metadata = releaseMetadata,
+                    artifacts = artifacts,
                     client = client
                 )
+                releaseMetadata.update(response)
                 session.appMetadata = releaseMetadata.toPersistableBundle()
 
                 watchProgress(
@@ -207,8 +215,13 @@ class SelfUpdate internal constructor(
             }
         }
 
+        val artifacts = artifactStates(
+            manifestUrl = release.manifestUrl,
+            artifacts = release.artifacts,
+        )
+        val response = download(artifacts, client)
         val releaseMetadata = ReleaseMetadata(release.versionCode)
-        val response = download(release = release, metadata = releaseMetadata, client = client)
+        releaseMetadata.update(response)
         val sessionId = installer.createSession(
             uri = Uri.parse(release.manifestUrl.toString()),
             estimatedSize = response.estimatedSize
@@ -264,7 +277,7 @@ class SelfUpdate internal constructor(
                     session.openWrite(name, offset, size)
                 },
                 complete = { name, size ->
-                    metadata.artifacts.getValue(name).markDownloadComplete(size)
+                    metadata.artifacts.getValue(name).bytesWritten = BytesWritten.complete(size)
                     session.appMetadata = metadata.toPersistableBundle()
                 }
             )
@@ -383,7 +396,6 @@ class SelfUpdate internal constructor(
         )
     }
 }
-
 
 
 open class SelfUpdateReceiver : BroadcastReceiver() {

@@ -1,0 +1,111 @@
+version: 2.1
+orbs:
+  gradle: circleci/gradle@3.0.0
+  android: circleci/android@2.0.3
+common: &common
+  working_directory: ~/code
+  executor:
+    name: android/android-machine
+    resource-class: large
+    tag: 2024.07.1
+jobs:
+  build:
+    <<: *common
+    steps:
+      - checkout
+      - gradle/with_cache:
+          deps_checksum_file: build.gradle.kts
+          steps:
+            - run:
+                name: Build
+                command: ./gradlew assemble
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ./*
+  unit-test:
+    <<: *common
+    steps:
+      - attach_workspace:
+          at: .
+      - gradle/with_cache:
+          deps_checksum_file: build.gradle.kts
+          steps:
+          - run:
+              name: Test
+              command: ./gradlew check
+  android-test:
+    <<: *common
+    parameters:
+      api:
+        type: integer
+    steps:
+      - attach_workspace:
+          at: .
+      - gradle/with_cache:
+          deps_checksum_file: build.gradle.kts
+          steps:
+            - restore_cache:
+                key: androidimages{{ checksum "self-update-core/build.gradle.kts" }}<< parameters.api >>
+                paths:
+                  - /opt/android/sdk/system-images
+            - run:
+                name: Setup Api << parameters.api >>
+                command: ./gradlew api<< parameters.api >>Setup
+                no_output_timeout: 30m
+            - save_cache:
+                key: androidimages{{ checksum "self-update-core/build.gradle.kts" }}<< parameters.api >>
+                paths:
+                  - /opt/android/sdk/system-images
+            - run:
+                name: Android Test Api << parameters.api >>
+                command: ./gradlew api<< parameters.api >>DebugAndroidTest
+  publish:
+    <<: *common
+    steps:
+      - attach_workspace:
+          at: .
+      - gradle/with_cache:
+          deps_checksum_file: build.gradle.kts
+          steps:
+            - run:
+                name: Publish
+                command: |
+                  echo "$MAVEN_CENTRAL_SEC_RING" | base64 -d > $HOME/secring.gpg
+                  gpg --import --batch $HOME/secring.gpg
+                  ./gradlew closeAndReleaseStagingRepositories -PsonatypeUsername="$SONATYPE_USERNAME" -PsonatypePassword="$SONATYPE_PASSWORD" -Psigning.keyId=34BCD878 -Psigning.password="$MAVEN_CENTRAL_KEY_PASSPHRASE" -Psigning.secretKeyRingFile=$HOME/secring.gpg -Ptag="$CIRCLE_TAG" -Porg.gradle.parallel=false
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build
+      - unit-test:
+          requires:
+            - build
+#      - android-test:
+#          name: android-test-api21
+#          api: 21
+#          requires:
+#            - build
+      - android-test:
+          name: android-test-api27
+          api: 27
+          requires:
+            - build
+      - android-test:
+          name: android-test-api34
+          api: 34
+          requires:
+            - build
+      - publish:
+          context: opensource-maven
+          requires:
+            - build
+#            - android-test-api21
+            - android-test-api27
+            - android-test-api34
+          filters:
+            branches:
+              only: main
+            tags:
+              only: /.*/

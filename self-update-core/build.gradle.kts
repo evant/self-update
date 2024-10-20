@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.conventions.publish)
 }
 
 android {
@@ -35,6 +36,37 @@ android {
         unitTests.all {
             it.useJUnitPlatform()
         }
+        managedDevices {
+            localDevices {
+                create("api34") {
+                    device = "Pixel 5"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+                create("api27") {
+                    device = "Pixel 5"
+                    apiLevel = 27
+                    systemImageSource = "aosp"
+                }
+                create("api21") {
+                    device = "Pixel 5"
+                    apiLevel = 21
+                    systemImageSource = "aosp"
+                }
+            }
+            groups {
+                create("all") {
+                    targetDevices.addAll(devices)
+                }
+            }
+        }
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+            withJavadocJar()
+        }
     }
 }
 
@@ -48,4 +80,14 @@ dependencies {
     testImplementation(libs.bundles.test)
     androidTestImplementation(libs.bundles.test)
     androidTestImplementation(libs.bundles.android.test)
+}
+
+publishing {
+    publications {
+        afterEvaluate {
+            named<MavenPublication>("release").configure {
+                from(components["release"])
+            }
+        }
+    }
 }

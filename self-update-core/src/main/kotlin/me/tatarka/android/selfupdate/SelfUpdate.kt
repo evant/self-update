@@ -141,9 +141,8 @@ class SelfUpdate internal constructor(
         if (installer.mySessions.isEmpty()) {
             return DownloadState.None
         }
-        // assuming a single session
-        val sessionInfo = installer.mySessions.first()
-        installer.openSession(sessionInfo.sessionId).use { session ->
+        val (_, session) = installer.openFirstValidSession() ?: return DownloadState.None
+        session.use {
             val metadata = session.appMetadata.toReleaseMetadata()
             if (metadata?.versionCode == release.versionCode) {
                 // check all artifacts are downloaded
@@ -171,10 +170,10 @@ class SelfUpdate internal constructor(
     ): Pair<PackageInstallerCompat.Session, Int> {
         val installer = PackageInstallerCompat.getInstance(context)
 
-        if (installer.mySessions.isNotEmpty()) {
-            // may already have a session, see if it's for the same release
-            val sessionInfo = installer.mySessions.first()
-            val session = installer.openSession(sessionInfo.sessionId)
+        // may already have a session, see if it's for the same release
+        val result = installer.openFirstValidSession()
+        if (result != null) {
+            val (sessionInfo, session) = result
             val releaseMetadata = session.appMetadata.toReleaseMetadata()
                 ?: ReleaseMetadata(release.versionCode)
 
@@ -244,6 +243,17 @@ class SelfUpdate internal constructor(
         return session to sessionId
     }
 
+    private fun PackageInstallerCompat.openFirstValidSession(): Pair<PackageInstallerCompat.SessionInfo, PackageInstallerCompat.Session>? {
+        for (sessionInfo in mySessions) {
+            try {
+                return sessionInfo to openSession(sessionInfo.sessionId)
+            } catch (e: SecurityException) {
+                // skip
+            }
+        }
+        return null
+    }
+
     private suspend fun watchProgress(
         installer: PackageInstallerCompat,
         sessionId: Int,
@@ -293,11 +303,14 @@ class SelfUpdate internal constructor(
     suspend fun delete(release: Release) {
         val packageManager = context.packageManager
         val installer = packageManager.packageInstaller
-        // only 1 session supported currently, delete it
-        val sessions = installer.mySessions
-        if (sessions.isNotEmpty()) {
-            val sessionId = sessions.first().sessionId
-            installer.abandonSession(sessionId)
+        // delete first accessible session
+        for (sessionInfo in installer.mySessions) {
+            try {
+                installer.abandonSession(sessionInfo.sessionId)
+                return
+            } catch (e: SecurityException) {
+                // skip
+            }
         }
     }
 

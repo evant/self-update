@@ -36,9 +36,9 @@ internal class PackageInstallerCompat private constructor(private val context: C
         if (Build.VERSION.SDK_INT < 27) {
             val state = PersistableBundleState.getInstance(context)
             // save size
-            val bundle = state.getBundle()
-            bundle.putLong("${sessionId}_size", params.size)
-            state.setBundle(bundle)
+            state.withBundle {
+                it.putLong("${sessionId}_size", params.size)
+            }
         }
         return sessionId
     }
@@ -138,7 +138,9 @@ internal class PackageInstallerCompat private constructor(private val context: C
         private val state = PersistableBundleState.getInstance(context)
 
         override val size: Long
-            get() = state.getBundle().getLong("${info.sessionId}_size")
+            get() {
+                return state.getBundle().getLong("${info.sessionId}_size", -1)
+            }
     }
 
     private fun createSession(
@@ -204,28 +206,24 @@ internal class PackageInstallerCompat private constructor(private val context: C
 
         override var appMetadata: PersistableBundle
             get() {
-                val bundle = state.getBundle()
-                if (cleanupStaleSessionMetadata(bundle)) {
-                    state.setBundle(bundle)
-                }
-                return bundle.getPersistableBundle(sessionId.toString()) ?: PersistableBundle.EMPTY
+                return state.withBundle {
+                    cleanupStaleSessionMetadata(it)
+                    it.getPersistableBundle(sessionId.toString())
+                } ?: PersistableBundle.EMPTY
             }
             set(value) {
-                val bundle = state.getBundle()
-                bundle.putPersistableBundle(sessionId.toString(), value)
-                state.setBundle(bundle)
-            }
-
-        private fun cleanupStaleSessionMetadata(bundle: PersistableBundle): Boolean {
-            var changed = false
-            val sessionIds = installer.mySessions.map { it.sessionId.toString() }
-            for (sessionId in bundle.keySet()) {
-                if (sessionId !in sessionIds) {
-                    bundle.remove(sessionId)
-                    changed = true
+                state.withBundle {
+                    it.putPersistableBundle(sessionId.toString(), value)
                 }
             }
-            return changed
+
+        private fun cleanupStaleSessionMetadata(bundle: PersistableBundle) {
+            val sessionIds = installer.mySessions.map { it.sessionId.toString() }
+            for (key: String? in bundle.keySet()) {
+                if (sessionIds.none { sessionId -> key?.startsWith(sessionId) != false }) {
+                    bundle.remove(key)
+                }
+            }
         }
     }
 
@@ -248,7 +246,9 @@ private class PersistableBundleState private constructor(private val file: File)
     fun load() {
         executor.submit {
             lock.withLock {
-                bundle = readBundle()
+                if (bundle == null) {
+                    bundle = readBundle()
+                }
             }
         }
     }
@@ -257,10 +257,15 @@ private class PersistableBundleState private constructor(private val file: File)
         return lock.withLock { bundle!! }
     }
 
-    fun setBundle(value: PersistableBundle) {
-        lock.withLock {
-            bundle = value
+    fun <T> withBundle(body: (PersistableBundle) -> T): T {
+        return lock.withLock {
+            val result = body(bundle!!)
+            submitWrite()
+            result
         }
+    }
+
+    private fun submitWrite() {
         executor.submit {
             lock.withLock {
                 writeBundle(bundle!!)

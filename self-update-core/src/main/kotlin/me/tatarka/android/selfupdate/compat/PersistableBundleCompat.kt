@@ -1,9 +1,10 @@
-package me.tatarka.android.selfupdate
+package me.tatarka.android.selfupdate.compat
 
 import android.os.Build
 import android.os.PersistableBundle
 import android.util.Xml
 import androidx.annotation.RequiresApi
+import me.tatarka.android.selfupdate.XmlUtils
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
 import org.xmlpull.v1.XmlSerializer

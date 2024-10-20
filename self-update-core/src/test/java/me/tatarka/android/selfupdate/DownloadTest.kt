@@ -27,15 +27,11 @@ class DownloadTest {
         webServer.enqueue(MockResponse().setBody("base.apk"))
 
         val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk"))
-            ),
-            metadata = ReleaseMetadata(versionCode = 1)
+            artifacts = mapOf(
+                "base" to ArtifactState(
+                    url = webServer.url("/base.apk")
+                )
+            )
         )
         var apkName = ""
         response.write(
@@ -56,18 +52,14 @@ class DownloadTest {
         webServer.enqueue(MockResponse().setBody("split.apk"))
 
         val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(
-                    Manifest.Artifact("base.apk"),
-                    Manifest.Artifact("split.apk")
+            artifacts = mapOf(
+                "base" to ArtifactState(
+                    url = webServer.url("/base.apk")
                 ),
-            ),
-            metadata = ReleaseMetadata(versionCode = 1)
+                "split" to ArtifactState(
+                    url = webServer.url("/split.apk")
+                )
+            )
         )
         val apkNames = mutableListOf<String>()
         response.write(
@@ -93,21 +85,17 @@ class DownloadTest {
         )
 
         val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk"))
-            ),
-            metadata = ReleaseMetadata(versionCode = 1)
+            artifacts = mapOf(
+                "base" to ArtifactState(
+                    url = webServer.url("/base.apk")
+                )
+            )
         )
         var progress = 0f
         response.write(
             onProgress = { progress = it },
             output = { _, _, _ ->
-                tempDir.resolve("base.apk").outputStream().buffered()
+                tempDir.resolve("base").outputStream().buffered()
             }
         )
 
@@ -128,18 +116,14 @@ class DownloadTest {
         )
 
         val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(
-                    Manifest.Artifact("base.apk"),
-                    Manifest.Artifact("split.apk")
+            artifacts = mapOf(
+                "base" to ArtifactState(
+                    url = webServer.url("/base.apk")
+                ),
+                "split" to ArtifactState(
+                    url = webServer.url("/split.apk")
                 )
-            ),
-            metadata = ReleaseMetadata(versionCode = 1)
+            )
         )
         val progresses = mutableListOf<Float>()
         response.write(
@@ -160,25 +144,16 @@ class DownloadTest {
                 .setBody("split.apk")
         )
 
-        val metadata = ReleaseMetadata(versionCode = 1).apply {
-            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
-                markDownloadComplete(8)
-            }
-        }
-
         val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(
-                    Manifest.Artifact("base.apk"),
-                    Manifest.Artifact("split.apk"),
+            artifacts = mapOf(
+                "base" to ArtifactState(
+                    url = webServer.url("/base.apk"),
+                    bytesWritten = BytesWritten.complete(8)
+                ),
+                "split" to ArtifactState(
+                    url = webServer.url("/split.apk")
                 )
-            ),
-            metadata = metadata
+            )
         )
 
         val apkNames = mutableListOf<String>()
@@ -196,85 +171,6 @@ class DownloadTest {
     }
 
     @Test
-    fun redownloads_artifacts_if_version_code_changes() = runTest {
-        webServer.enqueue(
-            MockResponse()
-                .setHeader("Content-Length", "8")
-                .setBody("base.apk")
-        )
-
-        val metadata = ReleaseMetadata(versionCode = 1).apply {
-            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
-                markDownloadComplete(8)
-            }
-        }
-
-        val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 2L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk"))
-            ),
-            metadata = metadata
-        )
-
-        var apkName = ""
-        response.write(
-            onProgress = {},
-            output = { name, _, _ ->
-                apkName = name
-                tempDir.resolve(name).outputStream().buffered()
-            }
-        )
-
-        assertThat(tempDir.resolve(apkName))
-            .hasText("base.apk")
-    }
-
-    @Test
-    fun redownloads_if_checksums_dont_match() = runTest {
-        webServer.enqueue(
-            MockResponse()
-                .setHeader("Content-Length", "8")
-                .setBody("base.apk")
-        )
-
-        val metadata = ReleaseMetadata(versionCode = 1).apply {
-            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
-                markDownloadComplete(8)
-                checksum = "a"
-            }
-        }
-
-        val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk", checksums = listOf("b")))
-            ),
-            metadata = metadata
-        )
-
-        var apkName = ""
-        response.write(
-            onProgress = {},
-            output = { name, _, _ ->
-                apkName = name
-                tempDir.resolve(name).outputStream().buffered()
-            }
-        )
-
-        assertThat(tempDir.resolve(apkName))
-            .hasText("base.apk")
-    }
-
-    @Test
     fun resume_download_with_range_request_if_server_supports_it() = runTest {
         webServer.enqueue(
             MockResponse()
@@ -284,24 +180,15 @@ class DownloadTest {
                 .setBody(".apk")
         )
 
-        val metadata = ReleaseMetadata(versionCode = 1).apply {
-            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
-                bytesWritten = 4
-            }
-        }
-
-        tempDir.resolve("base_0.apk").writeText("base")
+        tempDir.resolve("base").writeText("base")
 
         val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk"))
-            ),
-            metadata = metadata
+            artifacts = mapOf(
+                "base" to ArtifactState(
+                    url = webServer.url("/base.apk"),
+                    bytesWritten = BytesWritten(4)
+                )
+            )
         )
 
         var apkName = ""
@@ -338,24 +225,15 @@ class DownloadTest {
                 .setBody(".apk")
         )
 
-        val metadata = ReleaseMetadata(versionCode = 1).apply {
-            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
-                bytesWritten = 4
-            }
-        }
-
-        tempDir.resolve("base_0.apk").writeText("base")
+        tempDir.resolve("base").writeText("base")
 
         val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk"))
-            ),
-            metadata = metadata
+            artifacts = mapOf(
+                "base" to ArtifactState(
+                    url = webServer.url("/base.apk"),
+                    bytesWritten = BytesWritten(4),
+                )
+            )
         )
 
         var apkName = ""
@@ -393,22 +271,12 @@ class DownloadTest {
                 .setBody(".apk")
         )
 
-        val metadata = ReleaseMetadata(versionCode = 1).apply {
-            artifacts["base_0.apk"] = ReleaseMetadata.ArtifactMetadata().apply {
-                bytesWritten = 4
-            }
-        }
-
         val response = download(
-            SelfUpdate.Release(
-                versionName = "1.0",
-                versionCode = 1L,
-                notes = null,
-                tags = emptySet(),
-                manifestUrl = webServer.url("/"),
-                artifacts = listOf(Manifest.Artifact("base.apk"))
+            artifacts = mapOf(
+                "base" to ArtifactState(
+                    url = webServer.url("/base.apk"),
+                )
             ),
-            metadata = metadata
         )
 
         var apkName = ""

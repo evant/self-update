@@ -1,26 +1,32 @@
 package me.tatarka.android.selfupdate
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.FlakyTest
 import androidx.test.platform.app.InstrumentationRegistry
+import assertk.Assert
+import assertk.assertFailure
 import assertk.assertThat
 import assertk.assertions.hasSize
+import assertk.assertions.index
 import assertk.assertions.isBetween
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
+import assertk.assertions.isInstanceOf
 import assertk.assertions.prop
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import me.tatarka.android.selfupdate.compat.PackageInstallerCompat
 import me.tatarka.android.selfupdate.manifest.Manifest
-import okhttp3.OkHttpClient
+import okhttp3.internal.http2.ErrorCode
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
 import okhttp3.mockwebserver.internal.duplex.MockDuplexResponseBody
 import org.junit.After
 import org.junit.Rule
 import org.junit.runner.RunWith
 import java.io.IOException
-import java.time.Duration
 import kotlin.test.Test
 
 @RunWith(AndroidJUnit4::class)
@@ -29,12 +35,8 @@ class SelfUpdateTest {
     val webServer = MockWebServer()
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
-    private val installer = context.packageManager.packageInstaller
-    private val selfUpdate = SelfUpdate(
-        context = context, client = OkHttpClient.Builder()
-            .readTimeout(Duration.ofMillis(100))
-            .build()
-    )
+    private val installer = PackageInstallerCompat.getInstance(context)
+    private val selfUpdate = SelfUpdate(context = context)
 
     @After
     fun cleanup() {
@@ -71,15 +73,14 @@ class SelfUpdateTest {
         assertThat(selfUpdate.currentDownloadState(release))
             .isEqualTo(SelfUpdate.DownloadState.Complete)
 
-        val session = installer.mySessions.first()
+        val sessionInfo = installer.mySessions.first()
         // size is set to Content-Length
-        assertThat(session.size).isEqualTo(8)
+        assertThat(sessionInfo.size).isEqualTo(8)
         // has progress
-        assertThat(session.progress).isBetween(0f, 1f)
+        assertThat(sessionInfo.progress).isBetween(0f, 1f)
         // has downloaded artifact fully
-        installer.openSession(session.sessionId).use {
-            val name = it.names.first()
-            assertThat(it.openRead(name).readAllBytes()).isEqualTo("base.apk".toByteArray())
+        installer.openSession(sessionInfo.sessionId).use { session ->
+            assertThat(session).hasArtifactContents("base.apk")
         }
     }
 
@@ -118,6 +119,7 @@ class SelfUpdateTest {
     }
 
     @Test
+    @FlakyTest
     fun deletes_existing_session() = runTest {
         val release = SelfUpdate.Release(
             versionName = "1.0",
@@ -143,7 +145,7 @@ class SelfUpdateTest {
     }
 
     @Test
-    fun resumes_partial_download() = runTest {
+    fun resumes_non_downloaded_artifacts_after_failure() = runTest {
         val release = SelfUpdate.Release(
             versionName = "1.0",
             versionCode = 1L,
@@ -160,19 +162,18 @@ class SelfUpdateTest {
                 .addHeader("Content-Length", "8")
                 .setBody("base.apk")
         )
-        // hang the second response body to ensure it fails to download
-        val body = MockDuplexResponseBody()
+        // fail the download
         webServer.enqueue(
             MockResponse()
                 .addHeader("Content-Length", "15")
-                .setBody(body)
+                .setSocketPolicy(SocketPolicy.DISCONNECT_AT_END)
+                .setBody(MockDuplexResponseBody().cancelStream(ErrorCode.INTERNAL_ERROR))
         )
 
-        try {
+        assertFailure {
             selfUpdate.download(release)
-        } catch (e: IOException) {
-            // expected timeout
-        }
+        }.isInstanceOf<IOException>()
+
         webServer.takeRequest()
 
         // should have partial download state
@@ -195,12 +196,60 @@ class SelfUpdateTest {
             .isEqualTo("/base-x86_64.apk")
 
         // has downloaded artifacts fully
-        val session = installer.mySessions.first()
-        installer.openSession(session.sessionId).use {
-            assertThat(it.openRead(it.names[0]).readAllBytes()).isEqualTo("base.apk".toByteArray())
-            assertThat(
-                it.openRead(it.names[1]).readAllBytes()
-            ).isEqualTo("base-x86_64.apk".toByteArray())
+        val sessionInfo = installer.mySessions.first()
+        installer.openSession(sessionInfo.sessionId).use { session ->
+            assertThat(session).hasArtifactContents("base.apk", "base-x86_64.apk")
+        }
+    }
+
+    @Test
+    fun resumes_partial_artifact_download_after_failure() = runTest {
+        val release = SelfUpdate.Release(
+            versionName = "1.0",
+            versionCode = 1L,
+            notes = null,
+            tags = emptySet(),
+            manifestUrl = webServer.url("/"),
+            artifacts = listOf(Manifest.Artifact("base.apk"))
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "8")
+                .addHeader("Content-Range", "bytes 0-7/8")
+                .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY)
+                .setBody("base.apk")
+        )
+
+        assertFailure {
+            selfUpdate.download(release)
+        }.isInstanceOf<IOException>()
+
+        webServer.takeRequest()
+
+        // should have partial download state
+        assertThat(selfUpdate.currentDownloadState(release))
+            .isEqualTo(SelfUpdate.DownloadState.Partial)
+
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "4")
+                .addHeader("Content-Range", "bytes 4-7/8")
+                .setBody("base.apk")
+        )
+
+        selfUpdate.download(release)
+
+        // now should have full state
+        assertThat(selfUpdate.currentDownloadState(release))
+            .isEqualTo(SelfUpdate.DownloadState.Complete)
+
+        assertThat(webServer.takeRequest()).prop(RecordedRequest::path)
+            .isEqualTo("/base.apk")
+
+        // has downloaded artifacts fully
+        val sessionInfo = installer.mySessions.first()
+        installer.openSession(sessionInfo.sessionId).use { session ->
+            assertThat(session).hasArtifactContents("base.apk")
         }
     }
 
@@ -244,15 +293,125 @@ class SelfUpdateTest {
         assertThat(selfUpdate.currentDownloadState(release))
             .isEqualTo(SelfUpdate.DownloadState.Complete)
 
-        val session = installer.mySessions.first()
+        val sessionInfo = installer.mySessions.first()
         // size is set to Content-Length
-        assertThat(session.size).isEqualTo(8)
+        assertThat(sessionInfo.size).isEqualTo(8)
         // has progress
-        assertThat(session.progress).isBetween(0f, 1f)
+        assertThat(sessionInfo.progress).isBetween(0f, 1f)
         // has downloaded artifact fully
-        installer.openSession(session.sessionId).use {
-            val name = it.names.first()
-            assertThat(it.openRead(name).readAllBytes()).isEqualTo("base.apk".toByteArray())
+        installer.openSession(sessionInfo.sessionId).use { session ->
+            assertThat(session).hasArtifactContents("base.apk")
+        }
+    }
+
+    @Test
+    fun adding_artifact_since_last_download_downloads_new_artifact() = runTest {
+        val release = SelfUpdate.Release(
+            versionName = "1.0",
+            versionCode = 1L,
+            notes = null,
+            tags = emptySet(),
+            manifestUrl = webServer.url("/"),
+            artifacts = listOf(Manifest.Artifact("base.apk"))
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "8")
+                .setBody("base.apk")
+        )
+        selfUpdate.download(release)
+        webServer.takeRequest()
+
+        val newRelease = SelfUpdate.Release(
+            versionName = "1.0",
+            versionCode = 1L,
+            notes = null,
+            tags = emptySet(),
+            manifestUrl = webServer.url("/"),
+            artifacts = listOf(
+                Manifest.Artifact("base.apk"),
+                Manifest.Artifact("base-x86_64.apk")
+            )
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "15")
+                .setBody("base-x86_64.apk")
+        )
+
+        selfUpdate.download(newRelease)
+
+        assertThat(webServer.takeRequest()).prop(RecordedRequest::path)
+            .isEqualTo("/base-x86_64.apk")
+
+        // has downloaded artifacts fully
+        val sessionInfo = installer.mySessions.first()
+        installer.openSession(sessionInfo.sessionId).use { session ->
+            assertThat(session).hasArtifactContents("base.apk", "base-x86_64.apk")
+        }
+    }
+
+    @Test
+    fun removing_artifact_since_last_download_triggers_full_download() = runTest {
+        val release = SelfUpdate.Release(
+            versionName = "1.0",
+            versionCode = 1L,
+            notes = null,
+            tags = emptySet(),
+            manifestUrl = webServer.url("/"),
+            artifacts = listOf(
+                Manifest.Artifact("base.apk"),
+                Manifest.Artifact("base-x86_64.apk")
+            )
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "8")
+                .setBody("base.apk")
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "15")
+                .setBody("base-x86_64.apk")
+        )
+        selfUpdate.download(release)
+        webServer.takeRequest()
+        webServer.takeRequest()
+
+        val newRelease = SelfUpdate.Release(
+            versionName = "1.0",
+            versionCode = 1L,
+            notes = null,
+            tags = emptySet(),
+            manifestUrl = webServer.url("/"),
+            artifacts = listOf(Manifest.Artifact("base.apk"))
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "8")
+                .setBody("base.apk")
+        )
+
+        selfUpdate.download(newRelease)
+
+        assertThat(webServer.takeRequest()).prop(RecordedRequest::path)
+            .isEqualTo("/base.apk")
+
+        // has downloaded artifacts fully
+        val sessionInfo = installer.mySessions.first()
+        installer.openSession(sessionInfo.sessionId).use { session ->
+            assertThat(session).hasArtifactContents("base.apk")
         }
     }
 }
+
+private fun Assert<PackageInstallerCompat.Session>.hasArtifactContents(vararg contents: String) =
+    given { session ->
+        val names = session.names
+        assertThat(names).hasSize(contents.size)
+        contents.forEachIndexed { index, expectedContents ->
+            val actualContents = String(session.openRead(names[index]).use { it.readAllBytes() })
+            assertThat(names, name = "names").index(index)
+                .assertThat(actualContents).isEqualTo(expectedContents)
+        }
+    }

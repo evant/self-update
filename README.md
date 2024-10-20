@@ -210,7 +210,7 @@ hand or generate it using some other method.
                // The language for this artifact. (optional)
                "language": "en",
                // The apk checksums are returned from apksigner. (optional)
-               // The format is: signingVersion:algorithm:base64encodedValue
+               // The format is: signingVersion:algorithm:base64UrlEncodedValue
                // Currently v2:sha256 & v2:sha512 are supported.
                // While this argument is optional it is highly recommend you provide it.
                "checksums": [

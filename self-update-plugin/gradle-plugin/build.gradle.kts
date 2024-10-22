@@ -72,11 +72,6 @@ publishing {
                 }
             }
         }
-        repositories {
-            gradlePluginPortal {
-                name = "gradle-plugin-portal"
-            }
-        }
     }
 }
 

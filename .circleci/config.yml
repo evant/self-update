@@ -101,6 +101,7 @@ workflows:
           context: opensource-maven
           requires:
             - build
+            - unit-test
 #            - android-test-api21
             - android-test-api27
             - android-test-api34

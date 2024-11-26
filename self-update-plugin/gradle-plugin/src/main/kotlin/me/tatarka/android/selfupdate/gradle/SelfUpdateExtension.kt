@@ -17,6 +17,7 @@ import java.io.Serializable
 
 interface SelfUpdateExtension : SelfUpdateConfiguration {
     override val enabled: Property<Boolean>
+    override val includeUniversal: Property<Boolean>
     override val tags: SetProperty<String>
     override val notes: Property<String>
     override val artifactSuffix: Property<String>
@@ -44,6 +45,7 @@ interface ProjectSelfUpdateConfiguration : SelfUpdateConfiguration {
 
 interface SelfUpdateConfiguration {
     val enabled: Provider<Boolean>
+    val includeUniversal: Provider<Boolean>
     val tags: Provider<Set<String>>
     val notes: Provider<String>
     val artifactSuffix: Provider<String>
@@ -57,6 +59,7 @@ interface SelfUpdateConfiguration {
 
 class MergedSelfUpdateConfiguration(
     val enabled: Provider<Boolean>,
+    val includeUniversal: Provider<Boolean>,
     val tags: Provider<Set<String>>,
     val notes: Provider<String>,
     val artifactSuffix: Provider<String>,
@@ -81,6 +84,7 @@ internal fun MergedSelfUpdateConfiguration(
     )
     return MergedSelfUpdateConfiguration(
         enabled = configs.map { it.enabled }.merge(),
+        includeUniversal = configs.map { it.includeUniversal }.merge(),
         tags = configs.map { it.tags }.merge(),
         notes = configs.map { it.notes }.merge(),
         artifactSuffix = configs.map { it.artifactSuffix }.merge(),

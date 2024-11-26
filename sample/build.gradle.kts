@@ -50,6 +50,9 @@ android {
     lint {
         checkReleaseBuilds = false
     }
+    selfUpdate {
+        includeUniversal = true
+    }
 }
 
 dependencies {

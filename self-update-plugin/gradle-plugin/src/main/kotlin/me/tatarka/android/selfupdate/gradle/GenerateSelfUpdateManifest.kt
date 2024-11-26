@@ -10,6 +10,7 @@ import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
@@ -23,6 +24,11 @@ abstract class GenerateSelfUpdateManifest : BaseTask() {
     @get:InputDirectory
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val artifacts: DirectoryProperty
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    @get:Optional
+    abstract val universalArtifact: RegularFileProperty
 
     @get:Input
     abstract val version: Property<ManifestVersion>
@@ -46,8 +52,13 @@ abstract class GenerateSelfUpdateManifest : BaseTask() {
     fun run() {
         val version = version.get()
         val apkSplitsPath = artifacts.get().asFile
-        val artifacts = parseArtifactMetadata(apkSplitsPath.resolve("toc.pb")) { path ->
-            path.removeSurrounding(prefix = "splits/", suffix = ".apk") +
+        val artifacts = parseArtifactMetadata(
+            path = apkSplitsPath.resolve("toc.pb"),
+            universal = universalArtifact.orNull?.asFile
+        ) { path ->
+            path
+                .removePrefix("splits/")
+                .removeSuffix(".apk") +
                     artifactSuffix.getOrElse("") + ".apk"
         }
         val manifestPath = output.get().asFile

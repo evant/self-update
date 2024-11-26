@@ -52,6 +52,7 @@ class Manifest(val releases: List<Release>) {
     @Serializable
     class Artifact(
         val path: String,
+        val universal: Boolean? = null,
         val minSdk: Int? = null,
         val density: Int? = null,
         val abi: String? = null,

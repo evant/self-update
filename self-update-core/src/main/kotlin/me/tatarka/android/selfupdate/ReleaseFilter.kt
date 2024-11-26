@@ -97,6 +97,10 @@ private fun filterArtifacts(
     var targetAbiSdk = 0
     var targetDensity = 0
     for (artifact in artifacts) {
+        // skip universal artifact
+        if (artifact.universal == true) {
+            continue
+        }
         val artifactMinSdk = artifact.minSdk
         val artifactAbi = artifact.abi
         val artifactDensity = artifact.density
@@ -139,6 +143,9 @@ private fun filterArtifacts(
     }
     val targetAbi = deviceInfo.abis.getOrNull(abiMatchIndex)
     for (artifact in artifacts) {
+        if (artifact.universal == true) {
+            continue
+        }
         if (artifact.abi == null && artifact.density == null && artifact.language == null) {
             if (artifact.minSdk == null || artifact.minSdk == targetBaseSdk) {
                 result.add(artifact)

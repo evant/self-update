@@ -15,12 +15,23 @@ import java.util.Base64
 
 internal fun parseArtifactMetadata(
     path: File,
+    universal: File?,
     rename: (String) -> String = { it }
 ): List<Manifest.Artifact> {
     val toc = path.inputStream().buffered().use {
         BuildApksResult.parser().parseFrom(it)
     }
     return buildList {
+        if (universal != null) {
+            val checksums = checksums(universal)
+            add(
+                Manifest.Artifact(
+                    path = rename(universal.relativeTo(path.parentFile).path),
+                    universal = true,
+                    checksums = checksums.ifEmpty { null },
+                )
+            )
+        }
         for (variant in toc.variantList) {
             val minSdk = variant.targeting.sdkVersionTargeting.valueList.firstOrNull()?.min?.value
             for (apkSet in variant.apkSetList) {
@@ -54,7 +65,10 @@ internal fun parseArtifactMetadata(
 
 private fun checksums(path: File): List<String> {
     val result = ApkVerifier.Builder(path).build().verify()
-    val digests = ApkVerifier.getContentDigestsFromResult(result, ApkSigningBlockUtils.VERSION_APK_SIGNATURE_SCHEME_V2)
+    val digests = ApkVerifier.getContentDigestsFromResult(
+        result,
+        ApkSigningBlockUtils.VERSION_APK_SIGNATURE_SCHEME_V2
+    )
     val base64 = Base64.getUrlEncoder().withoutPadding()
     return digests.mapNotNull { (algorithm, data) ->
         val prefix = when (algorithm) {

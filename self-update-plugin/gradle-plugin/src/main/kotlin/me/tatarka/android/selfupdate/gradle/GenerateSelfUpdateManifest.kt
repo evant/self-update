@@ -62,7 +62,7 @@ abstract class GenerateSelfUpdateManifest : BaseTask() {
                         minSdk = version.minSdk,
                         maxSdk = version.maxSdk,
                         artifacts = artifacts,
-                        updater = Manifest.Updater(
+                        meta = Manifest.Meta(
                             version = 1,
                             feature_version = 1,
                         )

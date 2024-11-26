@@ -34,7 +34,7 @@ class Manifest(val releases: List<Release>) {
         val notes: String? = null,
         val minSdk: Int? = null,
         val maxSdk: Int? = null,
-        val updater: Updater? = null,
+        val meta: Meta? = null,
         val artifacts: List<Artifact> = emptyList(),
     ) {
         fun copy(tags: Set<String>): Release = Release(
@@ -44,7 +44,7 @@ class Manifest(val releases: List<Release>) {
             notes = notes,
             minSdk = minSdk,
             maxSdk = maxSdk,
-            updater = updater,
+            meta = meta,
             artifacts = artifacts
         )
     }
@@ -60,7 +60,7 @@ class Manifest(val releases: List<Release>) {
     )
 
     @Serializable
-    class Updater(
+    class Meta(
         val version: Long,
         val feature_version: Long,
     )

@@ -9,7 +9,7 @@ import assertk.assertions.prop
 import assertk.assertions.single
 import me.tatarka.android.selfupdate.manifest.Manifest.Artifact
 import me.tatarka.android.selfupdate.manifest.Manifest.Release
-import me.tatarka.android.selfupdate.manifest.Manifest.Updater
+import me.tatarka.android.selfupdate.manifest.Manifest.Meta
 import kotlin.test.Test
 
 class ManifestTest {
@@ -25,7 +25,7 @@ class ManifestTest {
                   "minSdk": 21,
                   "maxSdk": 34,
                   "tags": [ "production" ],
-                  "updater": {
+                  "meta": {
                     "version": 2,
                     "feature_version": 1
                   },
@@ -52,9 +52,9 @@ class ManifestTest {
                 prop(Release::artifacts).single().all {
                     prop(Artifact::path).isEqualTo("/build/outputs/apk/my-app.apk")
                 }
-                prop(Release::updater).isNotNull().all {
-                    prop(Updater::version).isEqualTo(2L)
-                    prop(Updater::feature_version).isEqualTo(1L)
+                prop(Release::meta).isNotNull().all {
+                    prop(Meta::version).isEqualTo(2L)
+                    prop(Meta::feature_version).isEqualTo(1L)
                 }
             }
     }

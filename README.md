@@ -81,6 +81,19 @@ android {
 }
 ```
 
+#### Universal apks
+
+You can additionally package a universal apk and include it in the manifest. This won't be used by
+self-update but can be useful for direct linking an initial download and for other tooling that
+doesn't support apk splits.
+
+```kotlin
+// build.gradle.kts
+selfUpdate {
+    includeUniveral = true
+}
+```
+
 #### Merge manifests
 
 You can merge all your variants into a single manifest. This allows you to have a single url to
@@ -201,6 +214,9 @@ hand or generate it using some other method.
                // 2. a domain-absolute path (/base.apk -> https://example.com/base.apk)
                // 3. a full url (https://cdn.example.com/base.apk)
                "path": "base.apk",
+               // If this artifact is universal. (optional)
+               // Skipped by self-update but may be useful for installing with other tooling. 
+               "universal": false,
                // The minSdk for this artifact. This should be at least the release's minSdk. (optional)
                "minSdk": 21,
                // The abi for this artifact. (optional) 

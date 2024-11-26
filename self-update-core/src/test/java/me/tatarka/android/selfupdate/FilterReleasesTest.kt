@@ -371,4 +371,38 @@ class FilterReleasesTest {
                 "en.apk"
             )
     }
+
+    @Test
+    fun skips_universal_artifact() {
+        val releases = listOf(
+            Manifest.Release(
+                version_name = "1.0",
+                version_code = 1,
+                minSdk = 21,
+                maxSdk = 34,
+                artifacts = listOf(
+                    Manifest.Artifact(path = "universal.apk", universal = true),
+                    Manifest.Artifact(path = "base.apk"),
+                ),
+            ),
+        )
+
+        val result = filterReleases(
+            manifestUrl = manifestUrl,
+            releases = releases,
+            versionCode = 1,
+            deviceInfo = DeviceInfo(
+                sdk = 21,
+                abis = arrayOf("armeabi-v7a"),
+                densityDpi = 0,
+                languages = listOf("en")
+            ),
+            onlyUpgrades = false,
+        )
+
+        assertThat(result).single()
+            .prop(SelfUpdate.Release::artifacts)
+            .extracting(Manifest.Artifact::path)
+            .containsExactly("base.apk")
+    }
 }

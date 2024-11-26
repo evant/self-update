@@ -109,6 +109,9 @@ class SelfUpdatePlugin : Plugin<Project> {
                             project.layout.buildDirectory.dir("intermediates/bundle_apk_splits/${variant.name}")
                         output.set(outputPath)
                         version.set(outputPath.map { it.file("version") })
+                        if (variantConfig != null) {
+                            includeUniversal.set(variantConfig.includeUniversal)
+                        }
 
                         val signingConfigName = variant.signingConfig.name
                         if (signingConfigName != null) {
@@ -141,6 +144,15 @@ class SelfUpdatePlugin : Plugin<Project> {
                         if (variantConfig != null) {
                             tags.convention(variantConfig.tags)
                             notes.convention(variantConfig.notes)
+                            universalArtifact.convention(
+                                variantConfig.includeUniversal.flatMap {
+                                    if (it) {
+                                        createArtifacts.flatMap { it.output.file("universal.apk") }
+                                    } else {
+                                        project.provider { null }
+                                    }
+                                }
+                            )
                         }
                     }
 
@@ -157,6 +169,15 @@ class SelfUpdatePlugin : Plugin<Project> {
                         }
 
                         val copyArtifacts = project.tasks.named<Copy>("copySelfUpdateArtifacts") {
+                            if (variantConfig != null) {
+                                from(variantConfig.includeUniversal.flatMap { universal ->
+                                    if (universal) {
+                                        createArtifacts.flatMap { it.output.file("universal.apk") }
+                                    } else {
+                                        project.provider { null }
+                                    }
+                                })
+                            }
                             from(createArtifacts.map { it.output.dir("splits") }) {
                                 rename { name ->
                                     name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
@@ -198,6 +219,15 @@ class SelfUpdatePlugin : Plugin<Project> {
                                 project.delete(packageVariantSelfUpdate.get().output.get())
                             }
                             duplicatesStrategy = DuplicatesStrategy.FAIL
+                            if (variantConfig != null) {
+                                from(variantConfig.includeUniversal.flatMap { universal ->
+                                    if (universal) {
+                                        createArtifacts.flatMap { it.output.file("universal.apk") }
+                                    } else {
+                                        project.provider { null }
+                                    }
+                                })
+                            }
                             from(createArtifacts.flatMap { it.output.file("splits") })
                             rename { name ->
                                 name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"

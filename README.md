@@ -185,7 +185,7 @@ hand or generate it using some other method.
          "maxSdk": 34,
          // Versioning metadata to ensure this release is compatible with the library that's 
          // performing the update.
-         "updater": {
+         "meta": {
             // The version of self-update that this release was generated with.
             "version": 1,
             // The version of self-update that this release is compatible with.

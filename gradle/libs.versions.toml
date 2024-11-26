@@ -1,6 +1,6 @@
 [versions]
 version = "0.1.0"
-android = "8.6.1"
+android = "8.7.2"
 kotlin = "1.9.20"
 nexus-publishing = "2.0.0"
 jvmTarget = "11"
@@ -26,7 +26,7 @@ assertk = { module = "com.willowtreeapps.assertk:assertk", version = "0.28.0" }
 test-runner = { module = "androidx.test:runner", version = "1.6.2" }
 test-rules = { module = "androidx.test:rules", version = "1.6.1" }
 test-junit = { module = "androidx.test.ext:junit", version = "1.2.1" }
-bundletool = { module = "com.android.tools.build:bundletool", version = "1.17.1" }
+bundletool = { module = "com.android.tools.build:bundletool", version = "1.17.2" }
 protobuf = { module = "com.google.protobuf:protobuf-java", version = "3.22.3" }
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android" }
 kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }

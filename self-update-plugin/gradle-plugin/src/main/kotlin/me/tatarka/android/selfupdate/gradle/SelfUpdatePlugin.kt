@@ -54,10 +54,13 @@ class SelfUpdatePlugin : Plugin<Project> {
 
 
                 if (projectConfig.mergeVariants.getOrElse(false) == true) {
-                    val packageSelfUpdate =
-                        project.tasks.register<PackageSelfUpdate>("packageSelfUpdate") {
-                            output.convention(defaultOutputDir)
-                        }
+                    val packageSelfUpdate = project.tasks.register<PackageSelfUpdate>(
+                        "packageSelfUpdate",
+                        ""
+                    )
+                    packageSelfUpdate.configure {
+                        output.convention(defaultOutputDir)
+                    }
 
                     val copyArtifacts = project.tasks.register<Copy>("copySelfUpdateArtifacts") {
                         doFirst {
@@ -69,7 +72,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                     val mergeManifest =
                         project.tasks.register<MergeSelfUpdateManifests>("mergeSelfUpdateManifests") {
                             dependsOn(copyArtifacts)
-                            output.set(packageSelfUpdate.flatMap { it.output.file("manifest.json") })
+                            output.set(packageSelfUpdate.flatMap { it.manifest })
                             projectConfig.base.manifest.finalizeValue()
                             if (projectConfig.base.manifest.isPresent) {
                                 manifests.from(projectConfig.base.manifest)
@@ -78,17 +81,20 @@ class SelfUpdatePlugin : Plugin<Project> {
                     if (projectConfig.base.update.getOrElse(false) == true) {
                         val updateBaseManifest =
                             project.tasks.register("updateBaseManifest") {
-                                inputs.file(mergeManifest.map { it.output })
+                                inputs.file(packageSelfUpdate.flatMap { it.manifest })
                                 doFirst {
                                     project.copy {
-                                        from(mergeManifest.get().output.get().asFile)
+                                        from(packageSelfUpdate.get().manifest.get().asFile)
                                         val manifestFile = projectConfig.base.manifest.get().asFile
                                         into(manifestFile.parentFile)
                                         rename { manifestFile.name }
                                     }
                                 }
                             }
-                        packageSelfUpdate.dependsOn(updateBaseManifest)
+                        packageSelfUpdate.dependsOn(mergeManifest)
+                        packageSelfUpdate.configure {
+                            finalizedBy(updateBaseManifest)
+                        }
                     }
                 } else {
                     project.tasks.register("packageSelfUpdate")
@@ -170,13 +176,13 @@ class SelfUpdatePlugin : Plugin<Project> {
 
                         val copyArtifacts = project.tasks.named<Copy>("copySelfUpdateArtifacts") {
                             if (variantConfig != null) {
-                                from(variantConfig.includeUniversal.flatMap { universal ->
-                                    if (universal) {
-                                        createArtifacts.flatMap { it.output.file("universal.apk") }
-                                    } else {
-                                        project.provider { null }
+                                if (variantConfig.includeUniversal.getOrElse(false)) {
+                                    from(createArtifacts.flatMap { it.output.file("universal.apk") }) {
+                                        rename { name ->
+                                            name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
+                                        }
                                     }
-                                })
+                                }
                             }
                             from(createArtifacts.map { it.output.dir("splits") }) {
                                 rename { name ->
@@ -197,9 +203,10 @@ class SelfUpdatePlugin : Plugin<Project> {
                         val packageSelfUpdate = project.tasks.named("packageSelfUpdate")
 
                         val packageVariantSelfUpdate = project.tasks.register<PackageSelfUpdate>(
-                            "package${variant.name.capitalized()}SelfUpdate"
-                        ) {
-                            variantName.set(variant.name)
+                            "package${variant.name.capitalized()}SelfUpdate",
+                            variant.name
+                        )
+                        packageVariantSelfUpdate.configure {
                             output.set(defaultOutputDir.map { it.dir(variant.name) })
                         }
 
@@ -208,7 +215,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                                 generateManifest.flatMap { it.version.map { version -> "-${version.code}" } })
 
                         generateManifest.configure {
-                            output.set(packageVariantSelfUpdate.flatMap { it.output.file("manifest.json") })
+                            output.set(packageVariantSelfUpdate.flatMap { it.manifest })
                             artifactSuffix.set(suffix)
                         }
 
@@ -220,13 +227,13 @@ class SelfUpdatePlugin : Plugin<Project> {
                             }
                             duplicatesStrategy = DuplicatesStrategy.FAIL
                             if (variantConfig != null) {
-                                from(variantConfig.includeUniversal.flatMap { universal ->
-                                    if (universal) {
-                                        createArtifacts.flatMap { it.output.file("universal.apk") }
-                                    } else {
-                                        project.provider { null }
+                                if (variantConfig.includeUniversal.getOrElse(false)) {
+                                    from(createArtifacts.flatMap { it.output.file("universal.apk") }) {
+                                       rename { name ->
+                                           name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
+                                       } 
                                     }
-                                })
+                                }
                             }
                             from(createArtifacts.flatMap { it.output.file("splits") })
                             rename { name ->

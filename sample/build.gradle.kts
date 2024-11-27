@@ -2,7 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.conventions.base)
-    alias(libs.plugins.selfupdate.gradle)
+    alias(libs.plugins.selfupdate)
+    alias(libs.plugins.selfupdate.github.release)
 }
 
 android {
@@ -53,6 +54,11 @@ android {
     selfUpdate {
         includeUniversal = true
     }
+}
+
+githubRelease {
+    owner = "evant" 
+    repo = "self-update"
 }
 
 dependencies {

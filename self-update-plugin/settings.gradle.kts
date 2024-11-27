@@ -20,6 +20,7 @@ dependencyResolutionManagement {
 }
 
 include(":gradle-plugin")
+include(":github-release")
 includeBuild("../self-update-manifest") {
     dependencySubstitution {
         substitute(module("me.tatarka.android.selfupdate:manifest")).using(project(":"))

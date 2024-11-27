@@ -26,6 +26,12 @@ class Manifest(val releases: List<Release>) {
         }
     }
 
+    fun copy(releases: List<Release>): Manifest {
+        return Manifest(
+            releases = releases,
+        )
+    }
+
     @Serializable
     class Release(
         val version_name: String,
@@ -37,7 +43,10 @@ class Manifest(val releases: List<Release>) {
         val meta: Meta? = null,
         val artifacts: List<Artifact> = emptyList(),
     ) {
-        fun copy(tags: Set<String>): Release = Release(
+        fun copy(
+            tags: Set<String> = this.tags,
+            artifacts: List<Artifact> = this.artifacts,
+        ): Release = Release(
             version_name = version_name,
             version_code = version_code,
             tags = tags,
@@ -58,7 +67,19 @@ class Manifest(val releases: List<Release>) {
         val abi: String? = null,
         val language: String? = null,
         val checksums: List<String>? = null,
-    )
+    ) {
+        fun copy(path: String): Artifact {
+            return Artifact(
+                path = path,
+                universal = universal,
+                minSdk = minSdk,
+                density = density,
+                abi = abi,
+                language = language,
+                checksums = checksums,
+            )
+        }
+    }
 
     @Serializable
     class Meta(

@@ -25,6 +25,8 @@ dependencies {
     implementation(libs.kotlin.gradle)
     implementation(libs.android.gradle)
     implementation(libs.nexus.publishing.gradle)
+    implementation(libs.testkit.gradle)
+    implementation("org.gradle.kotlin:gradle-kotlin-dsl-plugins:4.5.0")
     // hack to access version catalogue https://github.com/gradle/gradle/issues/15383
     implementation(files(libs.javaClass.superclass.protectionDomain.codeSource.location))
 }

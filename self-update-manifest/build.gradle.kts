@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.conventions.root)
     alias(libs.plugins.conventions.publish)
+    alias(libs.plugins.testkit)
 }
 
 dependencies {
@@ -18,6 +19,7 @@ publishing {
     publications {
         named<MavenPublication>("release").configure {
             from(components["java"])
+            artifactId = "manifest"
         }
     }
 }

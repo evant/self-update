@@ -177,17 +177,12 @@ class SelfUpdatePlugin : Plugin<Project> {
                         val copyArtifacts = project.tasks.named<Copy>("copySelfUpdateArtifacts") {
                             if (variantConfig != null) {
                                 if (variantConfig.includeUniversal.getOrElse(false)) {
-                                    from(createArtifacts.flatMap { it.output.file("universal.apk") }) {
-                                        rename { name ->
-                                            name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
-                                        }
-                                    }
+                                    from(createArtifacts.flatMap { it.output.file("universal.apk") })
                                 }
                             }
-                            from(createArtifacts.map { it.output.dir("splits") }) {
-                                rename { name ->
-                                    name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
-                                }
+                            from(createArtifacts.map { it.output.dir("splits") })
+                            rename { name ->
+                                name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
                             }
                         }
 
@@ -228,11 +223,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                             duplicatesStrategy = DuplicatesStrategy.FAIL
                             if (variantConfig != null) {
                                 if (variantConfig.includeUniversal.getOrElse(false)) {
-                                    from(createArtifacts.flatMap { it.output.file("universal.apk") }) {
-                                       rename { name ->
-                                           name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
-                                       } 
-                                    }
+                                    from(createArtifacts.flatMap { it.output.file("universal.apk") })
                                 }
                             }
                             from(createArtifacts.flatMap { it.output.file("splits") })

@@ -18,7 +18,7 @@ gradleTestKitSupport {
 gradlePlugin {
     plugins {
         create("selfUpdate") {
-            id = group.toString()
+            id = "me.tatarka.android.selfupdate"
             implementationClass = "me.tatarka.android.selfupdate.gradle.SelfUpdatePlugin"
         }
     }

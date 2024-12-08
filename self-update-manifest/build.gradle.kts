@@ -19,7 +19,6 @@ publishing {
     publications {
         named<MavenPublication>("release").configure {
             from(components["java"])
-            artifactId = "manifest"
         }
     }
 }

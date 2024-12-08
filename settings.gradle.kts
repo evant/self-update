@@ -20,7 +20,7 @@ rootProject.name = "self-update-project"
 includeBuild("self-update-plugin")
 includeBuild("self-update-manifest") {
     dependencySubstitution {
-        substitute(module("me.tatarka.android.selfupdate:manifest")).using(project(":"))
+        substitute(module("me.tatarka.android.selfupdate:self-update-manifest")).using(project(":"))
     }
 }
 include(":self-update-core")

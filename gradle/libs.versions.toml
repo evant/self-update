@@ -7,7 +7,7 @@ jvmTarget = "11"
 testkit = "0.10"
 
 [libraries]
-selfupdate-manifest = { module = "me.tatarka.android.selfupdate:manifest" }
+selfupdate-manifest = { module = "me.tatarka.android.selfupdate:self-update-manifest" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.6.0" }
 kotlinx-coroutine = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version = "1.8.1" }

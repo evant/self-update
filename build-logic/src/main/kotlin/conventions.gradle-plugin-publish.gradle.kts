@@ -24,26 +24,34 @@ val emptySourceJar = tasks.register<Jar>("emptySourceJar"){
 
 publishing {
     publications {
-        named<MavenPublication>("release").configure {
+        val release = named<MavenPublication>("release")
+        release.configure {
             from(components["java"])
         }
-        register<MavenPublication>("releasePluginMarkerMaven").configure {
-            artifactId = "$groupId.gradle.plugin"
-            artifact(emptyJavadocJar)
-            artifact(emptySourceJar)
-            pom {
-                mavenCentralPom()
-                withXml {
-                    val root = asElement()
-                    val document = root.ownerDocument
-                    val dependencies = root.appendChild(document.createElement("dependencies"))
-                    val dependency = dependencies.appendChild(document.createElement("dependency"))
-                    val groupId = dependency.appendChild(document.createElement("groupId"))
-                    groupId.textContent = project.group.toString()
-                    val artifactId = dependency.appendChild(document.createElement("artifactId"))
-                    artifactId.textContent = project.name
-                    val version = dependency.appendChild(document.createElement("version"))
-                    version.textContent = project.version.toString()
+        afterEvaluate {
+            gradlePlugin.plugins.forEach { plugin ->
+                register<MavenPublication>("releasePluginMarkerMaven").configure {
+                    val pluginArtifact = release.get()
+                    groupId = plugin.id
+                    artifactId = "${plugin.id}.gradle.plugin"
+                    version = pluginArtifact.version
+                    artifact(emptyJavadocJar)
+                    artifact(emptySourceJar)
+                    pom {
+                        mavenCentralPom()
+                        withXml {
+                            val root = asElement()
+                            val document = root.ownerDocument
+                            val dependencies = root.appendChild(document.createElement("dependencies"))
+                            val dependency = dependencies.appendChild(document.createElement("dependency"))
+                            val groupId = dependency.appendChild(document.createElement("groupId"))
+                            groupId.textContent = pluginArtifact.groupId
+                            val artifactId = dependency.appendChild(document.createElement("artifactId"))
+                            artifactId.textContent = pluginArtifact.artifactId
+                            val version = dependency.appendChild(document.createElement("version"))
+                            version.textContent = pluginArtifact.version
+                        }
+                    }
                 }
             }
         }

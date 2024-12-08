@@ -18,7 +18,7 @@ gradleTestKitSupport {
 gradlePlugin {
     plugins {
         create("githubRelease") {
-            id = "${group}.github-release"
+            id = "me.tatarka.android.selfupdate.github-release"
             implementationClass = "me.tatarka.android.selfupdate.gradle.GithubReleasePlugin"
         }
     }

@@ -20,6 +20,9 @@ signing {
     }
 
     publishing.publications.all {
-        sign(this)
+        // skip signing testkit
+        if (!name.contains("testKit")) {
+            sign(this)
+        }
     }
 }

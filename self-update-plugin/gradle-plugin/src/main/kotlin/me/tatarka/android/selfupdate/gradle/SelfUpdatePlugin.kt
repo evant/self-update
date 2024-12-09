@@ -69,7 +69,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                     val mergeManifest =
                         project.tasks.register<MergeSelfUpdateManifests>("mergeSelfUpdateManifests") {
                             dependsOn(copyArtifacts)
-                            output.set(packageSelfUpdate.flatMap { it.manifest })
+                            output.set(project.layout.buildDirectory.file("intermediates/selfupdate/manifest.json"))
                             projectConfig.base.manifest.finalizeValue()
                             if (projectConfig.base.manifest.isPresent) {
                                 manifests.from(projectConfig.base.manifest)
@@ -171,7 +171,14 @@ class SelfUpdatePlugin : Plugin<Project> {
                             artifactSuffix.set(suffix)
                         }
 
+                        val mergeManifests =
+                            project.tasks.named<MergeSelfUpdateManifests>("mergeSelfUpdateManifests") {
+                                manifests.from(generateManifest.map { it.output })
+                                variants.add(variant.name)
+                            }
+
                         val copyArtifacts = project.tasks.named<Sync>("copySelfUpdateArtifacts") {
+                            from(mergeManifests.flatMap { it.output })
                             if (variantConfig != null) {
                                 if (variantConfig.includeUniversal.getOrElse(false)) {
                                     from(createArtifacts.flatMap { it.output.file("universal.apk") })
@@ -179,16 +186,9 @@ class SelfUpdatePlugin : Plugin<Project> {
                             }
                             from(createArtifacts.map { it.output.dir("splits") })
                             rename { name ->
-                                name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
+                                renameApk(name, suffix.getOrElse(""))
                             }
                         }
-
-                        val mergeManifests =
-                            project.tasks.named<MergeSelfUpdateManifests>("mergeSelfUpdateManifests") {
-                                dependsOn(copyArtifacts)
-                                manifests.from(generateManifest.map { it.output })
-                                variants.add(variant.name)
-                            }
 
                         packageSelfUpdate.dependsOn(copyArtifacts, mergeManifests)
                     } else {
@@ -207,7 +207,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                                 generateManifest.flatMap { it.version.map { version -> "-${version.code}" } })
 
                         generateManifest.configure {
-                            output.set(packageVariantSelfUpdate.flatMap { it.manifest })
+                            output.set(project.layout.buildDirectory.file("intermediates/selfupdate/manifest.json"))
                             artifactSuffix.set(suffix)
                         }
 
@@ -215,6 +215,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                             "copy${variant.name.capitalized()}SelfUpdateArtifacts"
                         ) {
                             duplicatesStrategy = DuplicatesStrategy.FAIL
+                            from(generateManifest.flatMap { it.output })
                             if (variantConfig != null) {
                                 if (variantConfig.includeUniversal.getOrElse(false)) {
                                     from(createArtifacts.flatMap { it.output.file("universal.apk") })
@@ -222,7 +223,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                             }
                             from(createArtifacts.flatMap { it.output.file("splits") })
                             rename { name ->
-                                name.removeSuffix(".apk") + suffix.getOrElse("") + ".apk"
+                                renameApk(name, suffix.getOrElse(""))
                             }
                             into(packageVariantSelfUpdate.flatMap { it.output })
                         }
@@ -233,6 +234,14 @@ class SelfUpdatePlugin : Plugin<Project> {
                 }
             }
         }
+    }
+}
+
+private fun renameApk(name: String, suffix: String): String {
+    return if (name.endsWith(".apk")) {
+        name.removeSuffix(".apk") + suffix + ".apk"
+    } else {
+        name
     }
 }
 

@@ -12,6 +12,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.ExtensionAware
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Sync
 import org.gradle.internal.extensions.stdlib.capitalized
 import org.gradle.kotlin.dsl.getByType
@@ -62,19 +63,21 @@ class SelfUpdatePlugin : Plugin<Project> {
                         output.convention(defaultOutputDir)
                     }
 
-                    val copyArtifacts = project.tasks.register<Sync>("copySelfUpdateArtifacts") {
-                        duplicatesStrategy = DuplicatesStrategy.FAIL
-                        into(packageSelfUpdate.flatMap { it.output })
-                    }
                     val mergeManifest =
                         project.tasks.register<MergeSelfUpdateManifests>("mergeSelfUpdateManifests") {
-                            dependsOn(copyArtifacts)
                             output.set(project.layout.buildDirectory.file("intermediates/selfupdate/manifest.json"))
                             projectConfig.base.manifest.finalizeValue()
                             if (projectConfig.base.manifest.isPresent) {
                                 manifests.from(projectConfig.base.manifest)
                             }
                         }
+
+                    project.tasks.register<Sync>("copySelfUpdateArtifacts") {
+                        duplicatesStrategy = DuplicatesStrategy.FAIL
+                        from(mergeManifest.flatMap { it.output })
+                        into(packageSelfUpdate.flatMap { it.output })
+                    }
+
                     if (projectConfig.base.update.getOrElse(false) == true) {
                         val updateBaseManifest =
                             project.tasks.register("updateBaseManifest") {
@@ -111,7 +114,6 @@ class SelfUpdatePlugin : Plugin<Project> {
                         val outputPath =
                             project.layout.buildDirectory.dir("intermediates/bundle_apk_splits/${variant.name}")
                         output.set(outputPath)
-                        version.set(outputPath.map { it.file("version") })
                         if (variantConfig != null) {
                             includeUniversal.set(variantConfig.includeUniversal)
                         }
@@ -135,15 +137,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                         "generate${variant.name.capitalized()}SelfUpdateManifest"
                     ) {
                         artifacts.set(createArtifacts.flatMap { it.output })
-                        version.convention(createArtifacts.flatMap { task ->
-                            task.version.asFile
-                                .filter { it.exists() }
-                                .map { file ->
-                                    file.bufferedReader().use {
-                                        ManifestVersion.parse(it)
-                                    }
-                                }
-                        })
+                        version.set(createArtifacts.flatMap { it.version })
                         if (variantConfig != null) {
                             tags.convention(variantConfig.tags)
                             notes.convention(variantConfig.notes)
@@ -164,7 +158,12 @@ class SelfUpdatePlugin : Plugin<Project> {
                             project.tasks.named<PackageSelfUpdate>("packageSelfUpdate")
 
                         val suffix = (variantConfig?.artifactSuffix ?: projectConfig.artifactSuffix)
-                            .orElse(generateManifest.flatMap { it.version.map { version -> "${variant.name}-${version.code}" } })
+                            .orElse(
+                                defaultSuffix(
+                                    createArtifacts.flatMap { it.version },
+                                    variant.name
+                                )
+                            )
 
                         generateManifest.configure {
                             output.set(project.layout.buildDirectory.file("intermediates/selfupdate/${variant.name}/manifest.json"))
@@ -178,15 +177,19 @@ class SelfUpdatePlugin : Plugin<Project> {
                             }
 
                         val copyArtifacts = project.tasks.named<Sync>("copySelfUpdateArtifacts") {
-                            from(mergeManifests.flatMap { it.output })
                             if (variantConfig != null) {
                                 if (variantConfig.includeUniversal.getOrElse(false)) {
-                                    from(createArtifacts.flatMap { it.output.file("universal.apk") })
+                                    from(createArtifacts.flatMap { it.output.file("universal.apk") }) {
+                                        rename { name ->
+                                            renameApk(name, suffix.getOrElse(""))
+                                        }
+                                    }
                                 }
                             }
-                            from(createArtifacts.map { it.output.dir("splits") })
-                            rename { name ->
-                                renameApk(name, suffix.getOrElse(""))
+                            from(createArtifacts.map { it.output.dir("splits") }) {
+                                rename { name ->
+                                    renameApk(name, suffix.getOrElse(""))
+                                }
                             }
                         }
 
@@ -204,10 +207,11 @@ class SelfUpdatePlugin : Plugin<Project> {
 
                         val suffix =
                             (variantConfig?.artifactSuffix ?: projectConfig.artifactSuffix).orElse(
-                                generateManifest.flatMap { it.version.map { version -> "-${version.code}" } })
+                                defaultSuffix(createArtifacts.flatMap { it.version })
+                            )
 
                         generateManifest.configure {
-                            output.set(project.layout.buildDirectory.file("intermediates/selfupdate/manifest.json"))
+                            output.set(project.layout.buildDirectory.file("intermediates/selfupdate/${variant.name}/manifest.json"))
                             artifactSuffix.set(suffix)
                         }
 
@@ -233,6 +237,17 @@ class SelfUpdatePlugin : Plugin<Project> {
                     }
                 }
             }
+        }
+    }
+}
+
+private fun defaultSuffix(version: Provider<ManifestVersion>, variantName: String = ""): Provider<String> {
+    return version.map {
+        buildString {
+            if (variantName.isNotEmpty()) {
+                append("-${variantName}")
+            }
+            append("-${it.code}")
         }
     }
 }

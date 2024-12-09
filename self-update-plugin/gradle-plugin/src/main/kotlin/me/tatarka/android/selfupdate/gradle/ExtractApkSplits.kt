@@ -10,19 +10,24 @@ import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.logging.LogLevel
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
+import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
-import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.security.KeyStore
+import javax.inject.Inject
 
 @DisableCachingByDefault
-abstract class ExtractApkSplits : DefaultTask() {
+abstract class ExtractApkSplits @Inject constructor(
+    private val providers: ProviderFactory
+) : DefaultTask() {
     @get:InputFile
     abstract val appBundle: RegularFileProperty
 
@@ -52,8 +57,12 @@ abstract class ExtractApkSplits : DefaultTask() {
     @get:OutputDirectory
     abstract val output: DirectoryProperty
 
-    @get:OutputFile
-    abstract val version: RegularFileProperty
+    private val versionFile = output.file("version")
+
+    @get:Internal
+    val version: Provider<ManifestVersion> = providers.fileContents(versionFile).asText.map {
+        ManifestVersion.parse(it)
+    }
 
     @TaskAction
     fun run() {
@@ -161,7 +170,7 @@ abstract class ExtractApkSplits : DefaultTask() {
             maxSdk = maxSdkStream.toString(Charsets.UTF_8).trimEnd().toIntOrNull()
         )
 
-        version.get().asFile.bufferedWriter().use {
+        versionFile.get().asFile.bufferedWriter().use {
             manifestVersion.write(it)
         }
     }

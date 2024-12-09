@@ -5,14 +5,13 @@ import org.gradle.api.Project
 import org.gradle.internal.extensions.stdlib.capitalized
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.register
+import org.gradle.kotlin.dsl.withType
 
 class GithubReleasePlugin : Plugin<Project> {
     override fun apply(project: Project) {
         val config = project.extensions.create<GithubReleaseExtension>("githubRelease")
-        project.tasks.whenTaskAdded {
-            if (this is PackageSelfUpdate) {
-                registerTask(project, this, config)
-            }
+        project.tasks.withType<PackageSelfUpdate>().whenTaskAdded {
+            registerTask(project, this, config)
         }
     }
 

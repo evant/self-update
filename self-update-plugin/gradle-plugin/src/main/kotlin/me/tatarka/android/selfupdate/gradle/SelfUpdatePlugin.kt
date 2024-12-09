@@ -12,7 +12,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.ExtensionAware
-import org.gradle.api.tasks.Copy
+import org.gradle.api.tasks.Sync
 import org.gradle.internal.extensions.stdlib.capitalized
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.named
@@ -62,10 +62,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                         output.convention(defaultOutputDir)
                     }
 
-                    val copyArtifacts = project.tasks.register<Copy>("copySelfUpdateArtifacts") {
-                        doFirst {
-                            project.delete(packageSelfUpdate.get().output.get())
-                        }
+                    val copyArtifacts = project.tasks.register<Sync>("copySelfUpdateArtifacts") {
                         duplicatesStrategy = DuplicatesStrategy.FAIL
                         into(packageSelfUpdate.flatMap { it.output })
                     }
@@ -174,7 +171,7 @@ class SelfUpdatePlugin : Plugin<Project> {
                             artifactSuffix.set(suffix)
                         }
 
-                        val copyArtifacts = project.tasks.named<Copy>("copySelfUpdateArtifacts") {
+                        val copyArtifacts = project.tasks.named<Sync>("copySelfUpdateArtifacts") {
                             if (variantConfig != null) {
                                 if (variantConfig.includeUniversal.getOrElse(false)) {
                                     from(createArtifacts.flatMap { it.output.file("universal.apk") })
@@ -214,12 +211,9 @@ class SelfUpdatePlugin : Plugin<Project> {
                             artifactSuffix.set(suffix)
                         }
 
-                        val copyArtifacts = project.tasks.register<Copy>(
+                        val copyArtifacts = project.tasks.register<Sync>(
                             "copy${variant.name.capitalized()}SelfUpdateArtifacts"
                         ) {
-                            doFirst {
-                                project.delete(packageVariantSelfUpdate.get().output.get())
-                            }
                             duplicatesStrategy = DuplicatesStrategy.FAIL
                             if (variantConfig != null) {
                                 if (variantConfig.includeUniversal.getOrElse(false)) {

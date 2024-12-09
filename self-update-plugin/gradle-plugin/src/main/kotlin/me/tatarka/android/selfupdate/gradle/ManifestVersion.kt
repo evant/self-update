@@ -1,6 +1,5 @@
 package me.tatarka.android.selfupdate.gradle
 
-import java.io.Reader
 import java.io.Serializable
 import java.io.Writer
 
@@ -12,8 +11,8 @@ class ManifestVersion(
 ) : Serializable {
 
     companion object {
-        fun parse(input: Reader): ManifestVersion {
-            val (name, code, minSdk, maxSdk) = input.readLines()
+        fun parse(text: String): ManifestVersion {
+            val (name, code, minSdk, maxSdk) = text.lines()
             return ManifestVersion(
                 name = name,
                 code = code.toLong(),

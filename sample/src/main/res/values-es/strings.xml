@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="refresh">Actualizar</string>
+    <string name="install">Instalar</string>
+    <string name="download">Descargar</string>
+    <string name="update_failed">Actualización fallida</string>
+    <string name="ok">Aceptar</string>
+</resources>

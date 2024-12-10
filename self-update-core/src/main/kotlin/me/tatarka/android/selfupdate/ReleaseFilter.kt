@@ -10,6 +10,7 @@ import kotlin.math.abs
 private const val ANY_DPI = 65534
 
 internal class DeviceInfo(
+    val versionCode: Long,
     val sdk: Int,
     val abis: Array<String>,
     val densityDpi: Int,
@@ -17,6 +18,7 @@ internal class DeviceInfo(
 ) {
     companion object {
         val Unknown = DeviceInfo(
+            versionCode = 0,
             sdk = 0,
             abis = emptyArray(),
             densityDpi = 0,
@@ -26,11 +28,13 @@ internal class DeviceInfo(
 }
 
 internal fun DeviceInfo(context: Context): DeviceInfo {
+    val versionCode = context.versionCode()
     val abis = Build.SUPPORTED_ABIS
     val res = context.resources
     val densityDpi = res.displayMetrics.densityDpi
     val languages = res.configuration.locales().mapNotNull { it.language.ifEmpty { null } }
     return DeviceInfo(
+        versionCode = versionCode,
         sdk = Build.VERSION.SDK_INT,
         abis = abis,
         densityDpi = densityDpi,
@@ -41,7 +45,6 @@ internal fun DeviceInfo(context: Context): DeviceInfo {
 internal fun filterReleases(
     manifestUrl: HttpUrl,
     releases: List<me.tatarka.android.selfupdate.manifest.Manifest.Release>,
-    versionCode: Long,
     deviceInfo: DeviceInfo = DeviceInfo.Unknown,
     tags: Set<String>? = null,
     onlyUpgrades: Boolean = true,
@@ -49,7 +52,7 @@ internal fun filterReleases(
     return releases
         .filter {
             if (tags != null && it.tags != tags) return@filter false
-            if (onlyUpgrades && it.version_code <= versionCode) return@filter false
+            if (onlyUpgrades && it.version_code <= deviceInfo.versionCode) return@filter false
             if (deviceInfo.sdk > 0 && !sdkInRange(deviceInfo.sdk, it.minSdk, it.maxSdk))
                 return@filter false
             true
@@ -61,6 +64,7 @@ internal fun filterReleases(
                 versionCode = it.version_code,
                 notes = it.notes,
                 tags = it.tags,
+                currentRelease = deviceInfo.versionCode == it.version_code,
                 artifacts = filterArtifacts(it.artifacts, deviceInfo),
             )
         }
@@ -81,6 +85,15 @@ private fun Configuration.locales(): List<Locale> {
         List(list.size()) { list[it] }
     } else {
         listOf(locale)
+    }
+}
+
+private fun Context.versionCode(): Long {
+    val packageInfo = packageManager.getPackageInfo(packageName, 0)
+    return if (Build.VERSION.SDK_INT >= 28) {
+        packageInfo.longVersionCode
+    } else {
+        packageInfo.versionCode.toLong()
     }
 }
 

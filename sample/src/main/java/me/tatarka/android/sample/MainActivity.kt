@@ -32,6 +32,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -62,7 +63,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val version = packageManager.getPackageInfo(packageName, 0).versionName
+        val packageInfo = packageManager.getPackageInfo(packageName, 0)
+        val version = packageInfo.versionName
 
         setContent {
             val vm = viewModel<MainViewModel>()
@@ -77,7 +79,7 @@ class MainActivity : ComponentActivity() {
                     },
                     floatingActionButton = {
                         ExtendedFloatingActionButton(onClick = { vm.refresh() }) {
-                            Text("Refresh")
+                            Text(stringResource(R.string.refresh))
                         }
                     }
                 ) { padding ->
@@ -98,7 +100,7 @@ class MainActivity : ComponentActivity() {
                                                 vm.download(index)
                                             }
                                         }) {
-                                            Text(if (downloaded) "Install" else "Download")
+                                            Text(stringResource(if (downloaded) R.string.install else R.string.download))
                                         }
                                     }
                                 )
@@ -113,7 +115,7 @@ class MainActivity : ComponentActivity() {
                 if (updateFailed != null) {
                     AlertDialog(
                         title = {
-                            Text("Update Failed")
+                            Text(stringResource(R.string.update_failed))
                         },
                         text = {
                             Text(updateFailed ?: "")
@@ -121,7 +123,7 @@ class MainActivity : ComponentActivity() {
                         onDismissRequest = { vm.acceptFailure() },
                         confirmButton = {
                             TextButton(onClick = { vm.acceptFailure() }) {
-                                Text("Ok")
+                                Text(stringResource(R.string.ok))
                             }
                         },
                     )
@@ -139,8 +141,8 @@ class MainActivity : ComponentActivity() {
             flow {
                 emit(
                     selfUpdate.check(
-//            manifestUrl = "http://10.0.2.2:8000/manifest.json",
-                        manifestUrl = "http://10.0.0.18:8000/manifest.json",
+            manifestUrl = "http://10.0.2.2:8000/manifest.json",
+//                        manifestUrl = "http://10.0.0.18:8000/manifest.json",
                         onlyUpgrades = false
                     )
                 )

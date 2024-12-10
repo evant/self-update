@@ -34,7 +34,13 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
+            deviceInfo = DeviceInfo(
+                versionCode = 1,
+                sdk = 21,
+                abis = arrayOf("armeabi-v7a"),
+                densityDpi = 0,
+                languages = listOf("en_US")
+            ),
             onlyUpgrades = false,
         )
 
@@ -45,6 +51,7 @@ class FilterReleasesTest {
                 notes = null,
                 tags = emptySet(),
                 manifestUrl = manifestUrl,
+                currentRelease = true,
                 artifacts = emptyList(),
             ),
             SelfUpdate.Release(
@@ -53,6 +60,7 @@ class FilterReleasesTest {
                 notes = null,
                 tags = emptySet(),
                 manifestUrl = manifestUrl,
+                currentRelease = false,
                 artifacts = emptyList(),
             )
         )
@@ -80,7 +88,13 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
+            deviceInfo = DeviceInfo(
+                versionCode = 1,
+                sdk = 21,
+                abis = arrayOf("armeabi-v7a"),
+                densityDpi = 0,
+                languages = listOf("en_US")
+            ),
             onlyUpgrades = true,
         )
 
@@ -91,6 +105,7 @@ class FilterReleasesTest {
                 notes = null,
                 tags = emptySet(),
                 manifestUrl = manifestUrl,
+                currentRelease = false,
                 artifacts = emptyList(),
             )
         )
@@ -114,8 +129,8 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
             deviceInfo = DeviceInfo(
+                versionCode = 1,
                 sdk = 21,
                 abis = arrayOf("armeabi-v7a"),
                 densityDpi = 0,
@@ -149,8 +164,8 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
             deviceInfo = DeviceInfo(
+                versionCode = 1,
                 sdk = 21,
                 abis = arrayOf("arm64-v8a", "armeabi-v7a"),
                 densityDpi = 0,
@@ -183,8 +198,8 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
             deviceInfo = DeviceInfo(
+                versionCode = 1,
                 sdk = 21,
                 abis = arrayOf("arm64-v8a", "armeabi-v7a"),
                 densityDpi = 0,
@@ -237,8 +252,8 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
             deviceInfo = DeviceInfo(
+                versionCode = 1,
                 sdk = 33,
                 abis = arrayOf("armeabi-v7a"),
                 densityDpi = 0,
@@ -276,8 +291,8 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
             deviceInfo = DeviceInfo(
+                versionCode = 1,
                 sdk = 21,
                 abis = arrayOf("armeabi-v7a"),
                 densityDpi = 240,
@@ -315,8 +330,8 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
             deviceInfo = DeviceInfo(
+                versionCode = 1,
                 sdk = 21,
                 abis = arrayOf("armeabi-v7a"),
                 densityDpi = 200,
@@ -353,8 +368,8 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
             deviceInfo = DeviceInfo(
+                versionCode = 1,
                 sdk = 21,
                 abis = arrayOf("armeabi-v7a"),
                 densityDpi = 0,
@@ -390,8 +405,8 @@ class FilterReleasesTest {
         val result = filterReleases(
             manifestUrl = manifestUrl,
             releases = releases,
-            versionCode = 1,
             deviceInfo = DeviceInfo(
+                versionCode = 1,
                 sdk = 21,
                 abis = arrayOf("armeabi-v7a"),
                 densityDpi = 0,

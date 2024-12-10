@@ -12,7 +12,6 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageInstaller.SessionCallback
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +30,7 @@ import me.tatarka.android.selfupdate.compat.PackageInstallerCompat.Companion.EXT
 import me.tatarka.android.selfupdate.compat.PackageInstallerCompat.Companion.EXTRA_STATUS_MESSAGE
 import me.tatarka.android.selfupdate.compat.PackageInstallerCompat.Companion.STATUS_PENDING_USER_ACTION
 import me.tatarka.android.selfupdate.compat.PackageInstallerCompat.Companion.STATUS_SUCCESS
+import me.tatarka.android.selfupdate.manifest.Manifest
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -79,14 +79,11 @@ class SelfUpdate internal constructor(
         return withContext(Dispatchers.IO) {
             val manifestBody = manifestResponse.ensureBody()
             val manifest = manifestBody.byteStream().use { stream ->
-                json.decodeFromStream<me.tatarka.android.selfupdate.manifest.Manifest>(stream)
+                json.decodeFromStream<Manifest>(stream)
             }
-            val versionCode = context.versionCode()
-
             filterReleases(
                 manifestUrl = url,
                 releases = manifest.releases,
-                versionCode = versionCode,
                 deviceInfo = DeviceInfo(context),
                 tags = tags,
                 onlyUpgrades = onlyUpgrades,
@@ -100,7 +97,8 @@ class SelfUpdate internal constructor(
         val notes: String?,
         val tags: Set<String>,
         internal val manifestUrl: HttpUrl,
-        internal val artifacts: List<me.tatarka.android.selfupdate.manifest.Manifest.Artifact>,
+        internal val currentRelease: Boolean,
+        internal val artifacts: List<Manifest.Artifact>,
     ) {
 
         override fun equals(other: Any?): Boolean {
@@ -130,7 +128,7 @@ class SelfUpdate internal constructor(
 
     suspend fun download(
         release: Release,
-        onProgress: ((Float) -> Unit)? = null
+        onProgress: ((Float) -> Unit)? = null,
     ) {
         val (session, _) = getOrDownloadSession(release, onProgress)
         session.close()
@@ -141,6 +139,13 @@ class SelfUpdate internal constructor(
         if (installer.mySessions.isEmpty()) {
             return DownloadState.None
         }
+        val artifacts = if (release.currentRelease) {
+            val splits = context.packageManager.getPackageInfo(context.packageName, 0).splitNames.orEmpty()
+            filterSplits(release.artifacts, splits)
+        } else {
+            release.artifacts
+        }
+
         val (_, session) = installer.openFirstValidSession() ?: return DownloadState.None
         session.use {
             val metadata = session.appMetadata.toReleaseMetadata()
@@ -150,7 +155,7 @@ class SelfUpdate internal constructor(
                     return DownloadState.None
                 }
                 // not all artifacts have been fetched
-                if (metadata.artifacts.size != release.artifacts.size) {
+                if (metadata.artifacts.size != artifacts.size) {
                     return DownloadState.Partial
                 }
                 return if (metadata.artifacts.all { (_, value) -> value.bytesWritten.complete }) {
@@ -169,60 +174,72 @@ class SelfUpdate internal constructor(
         onProgress: ((Float) -> Unit)? = null
     ): Pair<PackageInstallerCompat.Session, Int> {
         val installer = PackageInstallerCompat.getInstance(context)
+        val sessionMode = sessionModeForRelease(release)
+
+        val artifacts = if (release.currentRelease) {
+            val splits = context.packageManager.getPackageInfo(context.packageName, 0).splitNames.orEmpty()
+            filterSplits(release.artifacts, splits)
+        } else {
+            release.artifacts
+        }
 
         // may already have a session, see if it's for the same release
         val result = installer.openFirstValidSession()
         if (result != null) {
             val (sessionInfo, session) = result
-            val releaseMetadata = session.appMetadata.toReleaseMetadata()
-                ?: ReleaseMetadata(release.versionCode)
 
-            val artifacts = artifactStates(
-                manifestUrl = release.manifestUrl,
-                artifacts = release.artifacts,
-                metadata = releaseMetadata.artifacts,
-            )
+            if (sessionInfo.mode == sessionMode) {
+                val releaseMetadata = session.appMetadata.toReleaseMetadata()
+                    ?: ReleaseMetadata(release.versionCode)
 
-            if (canReuseSession(release.versionCode, artifacts.keys, releaseMetadata)) {
-                if (onProgress != null) {
-                    onProgress(sessionInfo.progress)
-                }
-
-                val response = download(
+                val artifactStates = artifactStates(
+                    manifestUrl = release.manifestUrl,
                     artifacts = artifacts,
-                    client = client
+                    metadata = releaseMetadata.artifacts,
                 )
-                releaseMetadata.update(response)
-                session.appMetadata = releaseMetadata.toPersistableBundle()
 
-                watchProgress(
-                    installer = installer,
-                    sessionId = sessionInfo.sessionId,
-                    onProgress = onProgress
-                ) {
-                    downloadArtifacts(
-                        session = session,
-                        metadata = releaseMetadata,
-                        response = response
+                if (canReuseSession(release.versionCode, artifactStates.keys, releaseMetadata)) {
+                    if (onProgress != null) {
+                        onProgress(sessionInfo.progress)
+                    }
+
+                    val response = download(
+                        artifacts = artifactStates,
+                        client = client
                     )
-                }
+                    releaseMetadata.update(response)
+                    session.appMetadata = releaseMetadata.toPersistableBundle()
 
-                return session to sessionInfo.sessionId
-            } else {
-                // not a match, delete as we currently only handle 1 session
-                session.use { it.abandon() }
+                    watchProgress(
+                        installer = installer,
+                        sessionId = sessionInfo.sessionId,
+                        onProgress = onProgress
+                    ) {
+                        downloadArtifacts(
+                            session = session,
+                            metadata = releaseMetadata,
+                            response = response
+                        )
+                    }
+
+                    return session to sessionInfo.sessionId
+                }
             }
+
+            // not a match, delete as we currently only handle 1 session
+            session.use { it.abandon() }
         }
 
-        val artifacts = artifactStates(
+        val artifactStates = artifactStates(
             manifestUrl = release.manifestUrl,
-            artifacts = release.artifacts,
+            artifacts = artifacts,
         )
-        val response = download(artifacts, client)
+        val response = download(artifactStates, client)
         val releaseMetadata = ReleaseMetadata(release.versionCode)
         releaseMetadata.update(response)
         val sessionId = installer.createSession(
             uri = Uri.parse(release.manifestUrl.toString()),
+            mode = sessionMode,
             estimatedSize = response.estimatedSize
         )
         val session = installer.openSession(sessionId)
@@ -348,6 +365,11 @@ class SelfUpdate internal constructor(
         }
     }
 
+    private fun sessionModeForRelease(release: Release): Int {
+        return if (release.currentRelease) PackageInstallerCompat.SessionParams.MODE_INHERIT_EXISTING
+        else PackageInstallerCompat.SessionParams.MODE_FULL_INSTALL
+    }
+
     private suspend fun PackageInstallerCompat.watchSessionProgress(
         sessionId: Int,
         onProgress: (Float) -> Unit
@@ -393,10 +415,11 @@ class SelfUpdate internal constructor(
     @SuppressLint("InlinedApi")
     private fun PackageInstallerCompat.createSession(
         uri: Uri,
+        mode: Int = PackageInstallerCompat.SessionParams.MODE_FULL_INSTALL,
         estimatedSize: Long = 0
     ): Int {
         return createSession(
-            PackageInstallerCompat.SessionParams(PackageInstallerCompat.SessionParams.MODE_FULL_INSTALL)
+            PackageInstallerCompat.SessionParams(mode)
                 .apply {
                     setAppPackageName(context.packageName)
                     setOriginatingUri(uri)
@@ -407,6 +430,16 @@ class SelfUpdate internal constructor(
                     setRequireUserAction(PackageInstallerCompat.SessionParams.USER_ACTION_NOT_REQUIRED)
                 }
         )
+    }
+
+    private fun filterSplits(
+        artifacts: List<Manifest.Artifact>,
+        installedSplits: Array<out String>,
+    ): List<Manifest.Artifact> {
+        return artifacts.filter {
+            // right now the only supported splits to install after the fact are language splits
+            it.language != null && "config.${it.language}" !in installedSplits
+        }
     }
 }
 
@@ -455,11 +488,3 @@ internal fun Response.ensureBody(): ResponseBody {
     return body ?: throw IOException("${request.url} missing body")
 }
 
-private fun Context.versionCode(): Long {
-    val packageInfo = packageManager.getPackageInfo(packageName, 0)
-    return if (Build.VERSION.SDK_INT >= 28) {
-        packageInfo.longVersionCode
-    } else {
-        packageInfo.versionCode.toLong()
-    }
-}

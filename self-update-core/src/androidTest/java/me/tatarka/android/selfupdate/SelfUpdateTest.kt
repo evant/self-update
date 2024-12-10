@@ -57,6 +57,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(Manifest.Artifact("base.apk"))
         )
         webServer.enqueue(
@@ -101,6 +102,7 @@ class SelfUpdateTest {
                 notes = null,
                 tags = emptySet(),
                 manifestUrl = webServer.url("/"),
+                currentRelease = false,
                 artifacts = listOf(Manifest.Artifact("base.apk"))
             )
         )
@@ -113,6 +115,7 @@ class SelfUpdateTest {
                 notes = null,
                 tags = emptySet(),
                 manifestUrl = webServer.url("/"),
+                currentRelease = false,
                 artifacts = listOf(Manifest.Artifact("base.apk"))
             )
         )
@@ -130,6 +133,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(Manifest.Artifact("base.apk"))
         )
         webServer.enqueue(
@@ -155,6 +159,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(
                 Manifest.Artifact("base.apk"),
                 Manifest.Artifact("base-x86_64.apk")
@@ -213,6 +218,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(Manifest.Artifact("base.apk"))
         )
         webServer.enqueue(
@@ -264,6 +270,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(Manifest.Artifact("base.apk"))
         )
         webServer.enqueue(
@@ -315,6 +322,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(Manifest.Artifact("base.apk"))
         )
         webServer.enqueue(
@@ -331,6 +339,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(
                 Manifest.Artifact("base.apk"),
                 Manifest.Artifact("base-x86_64.apk")
@@ -362,6 +371,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(
                 Manifest.Artifact("base.apk"),
                 Manifest.Artifact("base-x86_64.apk")
@@ -387,6 +397,7 @@ class SelfUpdateTest {
             notes = null,
             tags = emptySet(),
             manifestUrl = webServer.url("/"),
+            currentRelease = false,
             artifacts = listOf(Manifest.Artifact("base.apk"))
         )
         webServer.enqueue(
@@ -404,6 +415,38 @@ class SelfUpdateTest {
         val sessionInfo = installer.mySessions.first()
         installer.openSession(sessionInfo.sessionId).use { session ->
             assertThat(session).hasArtifactContents("base.apk")
+        }
+    }
+
+    @Test
+    fun on_same_version_only_downloads_new_language_splits() = runTest {
+        val release = SelfUpdate.Release(
+            versionName = "1.0",
+            versionCode = 1L,
+            notes = null,
+            tags = emptySet(),
+            manifestUrl = webServer.url("/"),
+            currentRelease = true,
+            artifacts = listOf(
+                Manifest.Artifact("base.apk"),
+                Manifest.Artifact("base-es.apk", language = "es"),
+            )
+        )
+        webServer.enqueue(
+            MockResponse()
+                .addHeader("Content-Length", "11")
+                .setBody("base-es.apk")
+        )
+        selfUpdate.download(release)
+        
+        assertThat(webServer.takeRequest()).prop(RecordedRequest::path)
+            .isEqualTo("/base-es.apk")
+
+        // has downloaded artifacts fully
+        val sessionInfo = installer.mySessions.first()
+        assertThat(sessionInfo.mode).isEqualTo(PackageInstallerCompat.SessionParams.MODE_INHERIT_EXISTING)
+        installer.openSession(sessionInfo.sessionId).use { session ->
+            assertThat(session).hasArtifactContents("base-es.apk")
         }
     }
 }

@@ -35,8 +35,9 @@ internal class PackageInstallerCompat private constructor(private val context: C
         val sessionId = installer.createSession(params.params)
         if (Build.VERSION.SDK_INT < 27) {
             val state = PersistableBundleState.getInstance(context)
-            // save size
+            // save mode & size
             state.withBundle {
+                it.putInt("${sessionId}_mode", params.mode)
                 it.putLong("${sessionId}_size", params.size)
             }
         }
@@ -54,7 +55,7 @@ internal class PackageInstallerCompat private constructor(private val context: C
         installer.unregisterSessionCallback(callback)
     }
 
-    class SessionParams(mode: Int) {
+    class SessionParams(internal val mode: Int) {
         internal val params = PackageInstaller.SessionParams(mode)
         internal var size: Long = 0
             private set
@@ -125,6 +126,7 @@ internal class PackageInstallerCompat private constructor(private val context: C
     sealed class SessionInfo(protected val info: PackageInstaller.SessionInfo) {
         val sessionId: Int get() = info.sessionId
         val progress: Float get() = info.progress
+        abstract val mode: Int
         abstract val size: Long
     }
 
@@ -132,6 +134,8 @@ internal class PackageInstallerCompat private constructor(private val context: C
     private class SessionInfoApi27(info: PackageInstaller.SessionInfo) : SessionInfo(info) {
         override val size: Long
             get() = info.size
+        override val mode: Int
+            get() = info.mode
     }
 
     private inner class SessionInfoApi(info: PackageInstaller.SessionInfo) : SessionInfo(info) {
@@ -140,6 +144,10 @@ internal class PackageInstallerCompat private constructor(private val context: C
         override val size: Long
             get() {
                 return state.getBundle().getLong("${info.sessionId}_size", -1)
+            }
+        override val mode: Int
+            get() {
+                return state.getBundle().getInt("${info.sessionId}_mode", -1)
             }
     }
 

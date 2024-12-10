@@ -1,3 +1,8 @@
 <resources>
-    <string name="app_name">Self Update Sample</string>
+    <string name="app_name" translatable="false">Self Update Sample</string>
+    <string name="refresh">Refresh</string>
+    <string name="install">Install</string>
+    <string name="download">Download</string>
+    <string name="update_failed">Update Failed</string>
+    <string name="ok">OK</string>
 </resources>

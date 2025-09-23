@@ -1,4 +1,5 @@
 # Self Update
+migrated to: https://codeberg.org/pixellight/self-update
 
 A system for self-updating your android app.
 
